@@ -24,8 +24,9 @@ async def main() -> None:
     docs_service = build_docs_service(creds)
 
     max_events = int(os.getenv("CALENDAR_MAX_EVENTS", "5"))
+    calendar_id = os.getenv("CALENDAR_ID", "primary")
     contexts = await build_event_contexts(
-        calendar_service, docs_service, max_events=max_events
+        calendar_service, docs_service, max_events=max_events, calendar_id=calendar_id
     )
 
     if not contexts:
@@ -33,11 +34,14 @@ async def main() -> None:
         return
 
     runner = InMemoryRunner(agent=root_agent, app_name=APP_NAME)
-    session = await runner.session_service.create_session(
-        app_name=APP_NAME, user_id=USER_ID
-    )
 
     for context in contexts:
+        # A fresh session per event keeps each briefing generation isolated
+        # from the others — otherwise later events' prompts would carry the
+        # full conversation history of earlier ones.
+        session = await runner.session_service.create_session(
+            app_name=APP_NAME, user_id=USER_ID
+        )
         message = types.Content(
             role="user", parts=[types.Part(text=json.dumps(context))]
         )

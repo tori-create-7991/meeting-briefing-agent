@@ -9,9 +9,12 @@ async def build_event_contexts(
     calendar_service,
     docs_service,
     max_events: int = 5,
+    calendar_id: str = "primary",
     fetch_doc_text=default_fetch_doc_text,
 ) -> list[dict]:
-    events = fetch_upcoming_events(calendar_service, max_results=max_events)
+    events = fetch_upcoming_events(
+        calendar_service, calendar_id=calendar_id, max_results=max_events
+    )
 
     contexts = []
     for event in events:
