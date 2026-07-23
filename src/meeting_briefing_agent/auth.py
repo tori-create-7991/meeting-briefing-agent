@@ -12,10 +12,12 @@ SCOPES = [
 
 
 def _save_token(creds: Credentials, token_path: str) -> None:
-    # O_CREAT|0o600 so the refresh token isn't world/group-readable on
-    # multi-user machines — the default umask-derived permissions are not
-    # tight enough for a long-lived credential file.
+    # O_CREAT's mode only applies when the file doesn't already exist, so
+    # an fchmod is needed too — otherwise a pre-existing token.json (e.g.
+    # created by an older version of this file) keeps its original,
+    # possibly world/group-readable permissions across refreshes.
     fd = os.open(token_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    os.fchmod(fd, 0o600)
     with os.fdopen(fd, "w") as token_file:
         token_file.write(creds.to_json())
 
