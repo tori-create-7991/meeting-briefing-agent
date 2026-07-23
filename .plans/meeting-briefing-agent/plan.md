@@ -8,6 +8,14 @@
 
 ---
 
+## 前提条件
+
+- ✅ Python 3.10 以上（3.14.4 確認済み）
+- ✅ pip / venv で仮想環境を作成できること（pip 26.0.1 確認済み）
+- ✅ インターネット接続（`pip install google-adk` 等の取得に必要）
+- ✅ git（コミット用、リポジトリは init 済み、user.email は noreply アドレス設定済み）
+- ⚠️ SKIPPED: `GOOGLE_API_KEY`（Gemini AI Studio）・`credentials.json`（GCP `tori-agent` OAuth Desktopクライアント） — このセッションのコード実装・単体テストには不要。マニュアル実行検証（Verificationセクション）でのみユーザーが用意する。
+
 ## Context
 
 Notion task `meeting-briefing-agent` (実装, P2): build an ADK-based agent that
