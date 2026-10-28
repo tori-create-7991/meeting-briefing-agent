@@ -22,3 +22,4 @@ infra/**/.terraform.lock.hcl.bak
 infra/**/*.tfstate
 infra/**/*.tfstate.*
 infra/**/terraform.tfvars
+infra/**/*.tfplan

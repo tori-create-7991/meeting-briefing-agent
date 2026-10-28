@@ -27,7 +27,7 @@
 | D7 | リージョン | us-central1（Cloud Run・Agent Runtime） | 新機能が先に来る。Cloud Run の無料枠の対象リージョン | asia-northeast1 |
 | D8 | モデル | Vertex AI 経由、`BRIEFING_MODEL`（既定 `gemini-3.5-flash`） | Agent Platform 寄せ。正確な ID は実装時に確認 | AI Studio の API キー / 2.5 Flash / Pro |
 | D9 | IaC | Terraform を 2 段に分ける。`infra/bootstrap`（プロジェクトと状態用バケット、状態は手元）、`infra/main`（残り全部、状態は GCS） | プロジェクトが無いうちはその中にバケットを作れない | スクリプト / 状態を手元だけに置く |
-| D10 | GCP プロジェクト | 組織の下に専用プロジェクトを新しく作る（ID は `terraform.tfvars` で指定）。請求先は既存の請求先アカウント | 他の用途と権限が混ざらない。作り直しや片付けが簡単。請求先が同じなので無料枠は変わらない | 既存プロジェクトに同居 |
+| D10 | GCP プロジェクト | 組織の下に専用プロジェクトを新しく作る（ID は `terraform.tfvars` で指定）。請求先は、組織のアカウントから紐付けられる既存の請求先アカウント | 他の用途と権限が混ざらない。作り直しや片付けが簡単。無料枠は請求先アカウント単位 | 既存プロジェクトに同居 |
 | D11 | 読むアカウント | 本人の Workspace アカウント（`workspace_subject`） | 委任は Workspace のユーザーにしか使えない | 個人の Gmail |
 | D12 | Workspace の認証 | 鍵なしのドメイン全体の委任。委任用 SA `workspace-reader` が IAM の signBlob で署名し、`subject` を本人に固定。スコープは `calendar.readonly` と `documents.readonly` のみ | 保存する秘密がゼロ、更新作業も無い。同意画面を Terraform で作れない問題も消える | refresh token を Secret Manager に置く |
 | D13 | ローカル開発 | M1 のブラウザ同意（`credentials.json` / `token.json`）を `WORKSPACE_AUTH=local_oauth` として残す | 手元で手軽に動かせる | 委任のみ |
