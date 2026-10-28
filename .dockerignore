@@ -1,0 +1,17 @@
+.venv
+.git
+.plans
+.research
+.worktrees
+.claude
+.pytest_cache
+**/__pycache__
+credentials.json
+client_secret*.json
+token.json
+.env
+.env.*
+infra
+dist
+tests
+docs
