@@ -1,0 +1,123 @@
+{
+  "eval_set_id": "briefing",
+  "name": "Briefing writer quality",
+  "eval_cases": [
+    {
+      "eval_id": "no_related_docs",
+      "conversation": [
+        {
+          "invocation_id": "no_related_docs-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "{\"date\": \"2026-10-29\", \"max_events\": 5}"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "writer_agent",
+        "user_id": "eval",
+        "state": {
+          "briefing_contexts": "[{\"event\": {\"summary\": \"週次 1on1\", \"start\": {\"dateTime\": \"2026-10-29T10:00:00+09:00\"}, \"end\": {\"dateTime\": \"2026-10-29T11:00:00+09:00\"}, \"description\": \"いつもの近況共有。\"}, \"docs\": [], \"past_meeting_trends\": null}]"
+        }
+      },
+      "rubrics": [
+        {
+          "rubric_id": "says_no_docs",
+          "rubric_content": {
+            "text_property": "The response says that no related documents were found for the meeting."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        }
+      ]
+    },
+    {
+      "eval_id": "past_trends_not_available",
+      "conversation": [
+        {
+          "invocation_id": "past_trends_not_available-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "{\"date\": \"2026-10-29\", \"max_events\": 5}"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "writer_agent",
+        "user_id": "eval",
+        "state": {
+          "briefing_contexts": "[{\"event\": {\"summary\": \"プロダクト定例\", \"start\": {\"dateTime\": \"2026-10-29T10:00:00+09:00\"}, \"end\": {\"dateTime\": \"2026-10-29T11:00:00+09:00\"}, \"description\": \"リリース判定と障害振り返り。\"}, \"docs\": [{\"id\": \"doc-1\", \"text\": \"v2.3 のリリース判定。ブロッカーは決済画面の表示崩れ1件。\"}], \"past_meeting_trends\": null}]"
+        }
+      },
+      "rubrics": [
+        {
+          "rubric_id": "says_trends_unavailable",
+          "rubric_content": {
+            "text_property": "The response says that past meeting trends are not yet available, and does not describe any trend."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        },
+        {
+          "rubric_id": "uses_doc",
+          "rubric_content": {
+            "text_property": "The response mentions the release decision for v2.3 or the payment-screen blocker from the document."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        }
+      ]
+    },
+    {
+      "eval_id": "no_invented_facts",
+      "conversation": [
+        {
+          "invocation_id": "no_invented_facts-1",
+          "user_content": {
+            "role": "user",
+            "parts": [
+              {
+                "text": "{\"date\": \"2026-10-29\", \"max_events\": 5}"
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "writer_agent",
+        "user_id": "eval",
+        "state": {
+          "briefing_contexts": "[{\"event\": {\"summary\": \"採用面談\", \"start\": {\"dateTime\": \"2026-10-29T10:00:00+09:00\"}, \"end\": {\"dateTime\": \"2026-10-29T11:00:00+09:00\"}, \"description\": \"候補者との一次面談。\"}, \"docs\": [{\"id\": \"doc-2\", \"text\": \"評価観点: 設計力、コミュニケーション。\"}], \"past_meeting_trends\": null}, {\"event\": {\"summary\": \"顧客ミーティング\", \"start\": {\"dateTime\": \"2026-10-29T10:00:00+09:00\"}, \"end\": {\"dateTime\": \"2026-10-29T11:00:00+09:00\"}, \"description\": \"見積もりの確認。\"}, \"docs\": [{\"id\": \"doc-3\", \"error\": \"fetch_failed\"}], \"past_meeting_trends\": null}]"
+        }
+      },
+      "rubrics": [
+        {
+          "rubric_id": "no_new_facts",
+          "rubric_content": {
+            "text_property": "The response does not contain any person name, number, amount or date that is absent from the meeting titles, times, descriptions and document text."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        },
+        {
+          "rubric_id": "reports_fetch_failure",
+          "rubric_content": {
+            "text_property": "For the customer meeting, the response says that the document could not be fetched and does not guess its contents."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        },
+        {
+          "rubric_id": "covers_both",
+          "rubric_content": {
+            "text_property": "The response has a separate section for each of the two meetings."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        }
+      ]
+    }
+  ]
+}
