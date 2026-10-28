@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+project_id      = "my-briefing-agent"
+org_id          = "123456789012"
+billing_account = "000000-000000-000000"

@@ -1,0 +1,7 @@
+# Copy to terraform.tfvars (gitignored) and fill in real values.
+project_id        = "my-briefing-agent"
+org_id            = "123456789012"
+workspace_subject = "me@example.org"
+invoker_members   = ["user:me@example.org"]
+# mcp_image       = "us-central1-docker.pkg.dev/my-briefing-agent/meeting-briefing/mcp-front:<tag>"
+# runtime_identity = "service_account"
