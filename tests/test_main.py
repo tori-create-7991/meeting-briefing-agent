@@ -5,18 +5,18 @@ from types import SimpleNamespace
 import pytest
 
 from meeting_briefing_agent import main as main_module
-from meeting_briefing_agent.main import run_briefings
+from meeting_briefing_agent.main import generate_briefing, parse_args
 
 
-def text_event(text):
+def text_event(text, author="briefing_writer"):
     part = SimpleNamespace(text=text)
     return SimpleNamespace(
-        error_code=None, error_message=None, content=SimpleNamespace(parts=[part])
+        author=author, error_code=None, error_message=None, content=SimpleNamespace(parts=[part])
     )
 
 
 def error_event(code, message):
-    return SimpleNamespace(error_code=code, error_message=message, content=None)
+    return SimpleNamespace(author="briefing_writer", error_code=code, error_message=message, content=None)
 
 
 class FakeSessionService:
@@ -25,98 +25,63 @@ class FakeSessionService:
 
 
 class FakeRunner:
-    """Replays a scripted reply per call: a list of events, or an exception."""
+    """Replays one scripted reply: a list of events, or an exception."""
 
-    def __init__(self, replies):
-        self._replies = list(replies)
+    instances = []
+    reply = []
+
+    def __init__(self, agent=None, app_name=None):
         self.session_service = FakeSessionService()
-
-    async def run_async(self, user_id, session_id, new_message):
-        reply = self._replies.pop(0)
-        if isinstance(reply, Exception):
-            raise reply
-        for event in reply:
-            yield event
-
-
-def run(runner, contexts):
-    lines = []
-    failures = asyncio.run(run_briefings(runner, contexts, out=lines.append))
-    return failures, lines
-
-
-def context(summary):
-    return {"event": {"summary": summary}, "docs": [], "past_meeting_trends": None}
-
-
-def test_run_briefings_continues_after_one_event_fails():
-    runner = FakeRunner([RuntimeError("429 quota"), [text_event("Second briefing")]])
-
-    failures, lines = run(runner, [context("First"), context("Second")])
-
-    assert failures == 1
-    assert any("429 quota" in line for line in lines)
-    assert "Second briefing" in lines
-
-
-def test_run_briefings_reports_model_error_event_instead_of_empty_briefing():
-    runner = FakeRunner([[error_event("SAFETY", "blocked")]])
-
-    failures, lines = run(runner, [context("Blocked")])
-
-    assert failures == 1
-    assert any("SAFETY" in line for line in lines)
-
-
-def test_run_briefings_strips_terminal_control_characters_from_titles():
-    runner = FakeRunner([[text_event("ok")]])
-
-    _, lines = run(runner, [context("Evil\x1b[2Jtitle")])
-
-    assert "\x1b" not in lines[0]
-
-
-def test_run_briefings_strips_terminal_control_characters_from_errors():
-    runner = FakeRunner([RuntimeError("bad\x1b[2Jthing")])
-
-    _, lines = run(runner, [context("Title")])
-
-    assert not any("\x1b" in line for line in lines)
-
-
-class RecordingRunner(FakeRunner):
-    def __init__(self, replies):
-        super().__init__(replies)
         self.messages = []
+        self.closed = False
+        FakeRunner.instances.append(self)
 
     async def run_async(self, user_id, session_id, new_message):
         self.messages.append(new_message)
-        async for event in super().run_async(user_id, session_id, new_message):
+        if isinstance(FakeRunner.reply, Exception):
+            raise FakeRunner.reply
+        for event in FakeRunner.reply:
             yield event
 
-
-def test_run_briefings_sends_only_the_context_keys_and_keeps_non_ascii_text():
-    runner = RecordingRunner([[text_event("ok")]])
-
-    run(runner, [context("週次定例")])
-
-    payload = runner.messages[0].parts[0].text
-    assert set(json.loads(payload)) == {"event", "docs", "past_meeting_trends"}
-    assert "週次定例" in payload
+    async def close(self):
+        self.closed = True
 
 
-@pytest.mark.parametrize("raw", ["0", "51", "abc"])
-def test_read_max_events_rejects_out_of_range_values(monkeypatch, raw):
-    monkeypatch.setenv("CALENDAR_MAX_EVENTS", raw)
+def briefing(reply, request=None):
+    FakeRunner.reply = reply
+    runner = FakeRunner()
+    return runner, asyncio.run(generate_briefing(runner, request or {"date": None, "max_events": 5}))
 
+
+def test_parse_args_builds_the_request():
+    assert parse_args(["--date", "2026-10-29"]) == {"date": "2026-10-29", "max_events": 5}
+    assert parse_args(["--max-events", "3"]) == {"date": None, "max_events": 3}
+
+
+@pytest.mark.parametrize("argv", [["--date", "10/29"], ["--max-events", "0"], ["--max-events", "21"]])
+def test_parse_args_rejects_bad_values(argv):
     with pytest.raises(SystemExit):
-        main_module._read_max_events()
+        parse_args(argv)
 
 
-def test_read_max_events_accepts_valid_value(monkeypatch):
-    monkeypatch.setenv("CALENDAR_MAX_EVENTS", "7")
+def test_generate_briefing_sends_request_and_keeps_only_writer_text():
+    runner, text = briefing(
+        [text_event("fetcher noise", author="context_fetcher"), text_event("本文")],
+        {"date": "2026-10-29", "max_events": 3},
+    )
 
-    assert main_module._read_max_events() == 7
+    assert text == "本文"
+    assert json.loads(runner.messages[0].parts[0].text) == {"date": "2026-10-29", "max_events": 3}
+
+
+def test_generate_briefing_raises_on_model_error_event():
+    with pytest.raises(RuntimeError, match="SAFETY"):
+        briefing([error_event("SAFETY", "blocked")])
+
+
+def test_generate_briefing_raises_when_no_text_comes_back():
+    with pytest.raises(RuntimeError, match="no briefing text"):
+        briefing([])
 
 
 @pytest.mark.parametrize(
@@ -145,64 +110,29 @@ def test_check_model_config_rejects_missing_key(monkeypatch):
         main_module._check_model_config()
 
 
-class MainFakeRunner(FakeRunner):
-    instances = []
-
-    def __init__(self, agent, app_name):
-        super().__init__(MainFakeRunner.replies)
-        self.closed = False
-        MainFakeRunner.instances.append(self)
-
-    async def close(self):
-        self.closed = True
-
-
-def patch_main(monkeypatch, contexts, replies):
+def patch_main(monkeypatch, reply):
     import google.adk.runners
 
     monkeypatch.setattr(main_module, "load_dotenv", lambda: None)
     monkeypatch.setenv("GOOGLE_API_KEY", "test-key")
-    monkeypatch.delenv("CALENDAR_MAX_EVENTS", raising=False)
-    monkeypatch.delenv("CALENDAR_ID", raising=False)
-    monkeypatch.setattr(main_module, "get_credentials", lambda: "creds")
-    monkeypatch.setattr(main_module, "build_calendar_service", lambda creds: "calendar")
-    monkeypatch.setattr(main_module, "build_docs_service", lambda creds: "docs")
-    calls = []
-
-    def fake_build_event_contexts(calendar, docs, **kwargs):
-        calls.append((calendar, docs, kwargs))
-        return contexts
-
-    monkeypatch.setattr(main_module, "build_event_contexts", fake_build_event_contexts)
-    MainFakeRunner.instances = []
-    MainFakeRunner.replies = replies
-    monkeypatch.setattr(google.adk.runners, "InMemoryRunner", MainFakeRunner)
-    return calls
+    monkeypatch.setattr(google.adk.runners, "InMemoryRunner", FakeRunner)
+    FakeRunner.instances = []
+    FakeRunner.reply = reply
 
 
-def test_main_returns_1_and_closes_runner_when_a_briefing_fails(monkeypatch):
-    calls = patch_main(
-        monkeypatch,
-        [context("A"), context("B")],
-        [RuntimeError("boom"), [text_event("ok")]],
-    )
+def test_main_prints_briefing_and_returns_0(monkeypatch, capsys):
+    patch_main(monkeypatch, [text_event("Evil\x1b[2J briefing")])
 
-    assert asyncio.run(main_module.main()) == 1
-    assert MainFakeRunner.instances[0].closed
-    assert calls == [
-        ("calendar", "docs", {"max_events": 5, "calendar_id": "primary"})
-    ]
+    assert asyncio.run(main_module.main(["--date", "2026-10-29"])) == 0
+    assert FakeRunner.instances[0].closed
+    out = capsys.readouterr().out
+    assert "briefing" in out and "\x1b" not in out
 
 
-def test_main_returns_0_when_all_briefings_succeed(monkeypatch):
-    patch_main(monkeypatch, [context("A")], [[text_event("ok")]])
+def test_main_returns_1_and_closes_runner_on_failure(monkeypatch, capsys):
+    patch_main(monkeypatch, RuntimeError("quota\x1b[2J"))
 
-    assert asyncio.run(main_module.main()) == 0
-    assert MainFakeRunner.instances[0].closed
-
-
-def test_main_returns_0_without_a_runner_when_there_are_no_events(monkeypatch):
-    patch_main(monkeypatch, [], [])
-
-    assert asyncio.run(main_module.main()) == 0
-    assert MainFakeRunner.instances == []
+    assert asyncio.run(main_module.main([])) == 1
+    assert FakeRunner.instances[0].closed
+    err = capsys.readouterr().err
+    assert "quota" in err and "\x1b" not in err

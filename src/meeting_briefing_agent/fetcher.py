@@ -7,6 +7,7 @@ session state as `briefing_contexts` for BriefingWriter.
 
 import asyncio
 import json
+import os
 from collections.abc import AsyncGenerator, Callable
 
 from google.adk.agents import BaseAgent
@@ -31,6 +32,7 @@ def build_contexts_from_workspace(date: str | None, max_events: int) -> list[dic
             build_calendar_service(creds),
             build_docs_service(creds),
             max_events=max_events,
+            calendar_id=os.getenv("CALENDAR_ID", "primary"),
             date=date,
         )
     except TransportError as exc:
