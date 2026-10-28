@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "meeting-briefing-agent"
+version = "0.1.0"
+description = "ADK agent that drafts pre-meeting briefings from Google Calendar events and related Docs"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "google-adk>=2.5.0,<3",
+    "google-api-python-client>=2.198.0",
+    "google-auth>=2.56.2",
+    "google-auth-httplib2>=0.4.0",
+    "google-auth-oauthlib>=1.4.0",
+    "httplib2>=0.32.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=9.1.1"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

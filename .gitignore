@@ -1,1 +1,17 @@
 .worktrees/
+
+# OAuth client secrets and cached tokens — never commit
+credentials.json
+client_secret*.json
+token.json
+.token-*.tmp
+.env
+.env.*
+!.env.example
+
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
+*.egg-info/
