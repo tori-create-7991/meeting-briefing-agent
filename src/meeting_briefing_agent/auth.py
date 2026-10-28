@@ -10,10 +10,13 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 
 logger = logging.getLogger(__name__)
 
-SCOPES = [
+# Read-only Calendar and Docs. Shared by the local OAuth flow and the
+# domain-wide delegation credentials (credentials.py).
+WORKSPACE_SCOPES = [
     "https://www.googleapis.com/auth/calendar.readonly",
     "https://www.googleapis.com/auth/documents.readonly",
 ]
+SCOPES = WORKSPACE_SCOPES
 
 
 def _save_token(creds: Credentials, token_path: str) -> None:

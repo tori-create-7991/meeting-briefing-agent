@@ -5,7 +5,7 @@ import pytest
 from google.auth.exceptions import RefreshError
 
 from meeting_briefing_agent import auth
-from meeting_briefing_agent.auth import _save_token, get_credentials
+from meeting_briefing_agent.auth import SCOPES, WORKSPACE_SCOPES, _save_token, get_credentials
 
 
 class FakeCreds:
@@ -154,3 +154,10 @@ def test_get_credentials_falls_back_to_consent_when_token_file_is_corrupt(tmp_pa
 
     assert flow.ran and creds is fresh
     assert token_path.read_text() == '{"token": "fake"}'
+
+
+def test_scopes_are_read_only_calendar_and_docs():
+    assert SCOPES == WORKSPACE_SCOPES == [
+        "https://www.googleapis.com/auth/calendar.readonly",
+        "https://www.googleapis.com/auth/documents.readonly",
+    ]
