@@ -3,6 +3,7 @@ import base64
 import json
 
 import pytest
+from mcp.server.mcpserver.exceptions import ToolError
 
 from meeting_briefing_mcp import server
 
@@ -56,14 +57,14 @@ def test_get_briefing_defaults(engine):
 
 @pytest.mark.parametrize("date", ["10/29", "2026-13-01", ""])
 def test_get_briefing_rejects_bad_date_without_calling_agent(engine, date):
-    with pytest.raises(ValueError, match="YYYY-MM-DD"):
+    with pytest.raises(ToolError, match="YYYY-MM-DD"):
         asyncio.run(server.get_briefing(date=date))
     assert engine.calls == []
 
 
 @pytest.mark.parametrize("max_events", [0, 21, True])
 def test_get_briefing_rejects_out_of_range_max_events(engine, max_events):
-    with pytest.raises(ValueError, match="max_events"):
+    with pytest.raises(ToolError, match="max_events"):
         asyncio.run(server.get_briefing(max_events=max_events))
     assert engine.calls == []
 
@@ -113,7 +114,7 @@ def call_over_http(arguments):
         "method": "tools/call",
         "params": {"name": "get_briefing", "arguments": arguments},
     }
-    with TestClient(server.app, base_url="https://mcp-front-abc-uc.a.run.app") as client:
+    with TestClient(server.create_app(), base_url="https://mcp-front-abc-uc.a.run.app") as client:
         response = client.post("/mcp", headers=headers, json=call)
     assert response.status_code == 200, response.text
     return response.json()["result"]
@@ -133,3 +134,13 @@ def test_http_app_returns_tool_error_for_bad_input(engine):
     assert result["isError"] is True
     assert "YYYY-MM-DD" in result["content"][0]["text"]
     assert engine.calls == []
+
+
+def test_get_briefing_reports_agent_failures_with_their_cause(monkeypatch):
+    def broken_engine():
+        raise PermissionError("403 aiplatform.reasoningEngines.query denied")
+
+    monkeypatch.setattr(server, "get_engine", broken_engine)
+
+    with pytest.raises(ToolError, match="reasoningEngines.query denied"):
+        asyncio.run(server.get_briefing())

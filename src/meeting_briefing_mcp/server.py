@@ -13,6 +13,7 @@ import json
 import os
 
 from mcp.server.mcpserver import Context, MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 WRITER_NAME = "briefing_writer"
 MAX_EVENTS_LIMIT = 20
@@ -92,11 +93,23 @@ async def get_briefing(
             default). Omit for upcoming events from now on.
         max_events: Number of events to cover, 1-20.
     """
-    request = validate_request(date, max_events)
+    # ToolError messages reach the caller; other exceptions would be reduced
+    # to a generic "Error executing tool".
+    try:
+        request = validate_request(date, max_events)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
     user_id = caller_email(ctx.headers if ctx else None)
-    return await query_agent(request, user_id)
+    try:
+        return await query_agent(request, user_id)
+    except Exception as exc:  # noqa: BLE001 - report the cause to the caller
+        raise ToolError(f"Agent Runtime call failed: {type(exc).__name__}: {exc}") from exc
 
 
-# Cloud Run serves on 0.0.0.0, so the SDK's localhost-only DNS rebinding
-# guard does not apply; Cloud Run IAM rejects unauthenticated requests.
-app = mcp.streamable_http_app(stateless_http=True, json_response=True, host="0.0.0.0")
+def create_app():
+    # Cloud Run serves on 0.0.0.0, so the SDK's localhost-only DNS rebinding
+    # guard does not apply; Cloud Run IAM rejects unauthenticated requests.
+    return mcp.streamable_http_app(stateless_http=True, json_response=True, host="0.0.0.0")
+
+
+app = create_app()
