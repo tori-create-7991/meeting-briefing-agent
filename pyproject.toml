@@ -9,15 +9,17 @@ description = "ADK agent that drafts pre-meeting briefings from Google Calendar 
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
-    "google-adk>=2.5.0",
-    "google-api-python-client",
-    "google-auth-httplib2",
-    "google-auth-oauthlib",
-    "python-dotenv",
+    "google-adk>=2.5.0,<3",
+    "google-api-python-client>=2.198.0",
+    "google-auth>=2.56.2",
+    "google-auth-httplib2>=0.4.0",
+    "google-auth-oauthlib>=1.4.0",
+    "httplib2>=0.32.0",
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio", "pytest-mock"]
+dev = ["pytest>=9.1.1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,30 +1,35 @@
-import asyncio
-
-from meeting_briefing_agent.pipeline import build_event_contexts
+from meeting_briefing_agent.calendar_client import EVENT_LIST_FIELDS
+from meeting_briefing_agent.pipeline import (
+    MAX_DESCRIPTION_CHARS,
+    build_event_contexts,
+    project_event,
+)
 
 
 class FakeEventsList:
     def __init__(self, items):
         self._items = items
 
-    def execute(self):
+    def execute(self, num_retries=0):
         return {"items": self._items}
 
 
 class FakeEvents:
     def __init__(self, items):
         self._items = items
+        self.list_kwargs = None
 
     def list(self, **kwargs):
+        self.list_kwargs = kwargs
         return FakeEventsList(self._items)
 
 
 class FakeCalendarService:
     def __init__(self, items):
-        self._items = items
+        self._events = FakeEvents(items)
 
     def events(self):
-        return FakeEvents(self._items)
+        return self._events
 
 
 def test_build_event_contexts_assembles_docs_for_attachment_event(
@@ -37,13 +42,11 @@ def test_build_event_contexts_assembles_docs_for_attachment_event(
         fetched_ids.append(document_id)
         return f"text-for-{document_id}"
 
-    contexts = asyncio.run(
-        build_event_contexts(
-            calendar_service,
-            docs_service=object(),
-            max_events=5,
-            fetch_doc_text=fake_fetch_doc_text,
-        )
+    contexts = build_event_contexts(
+        calendar_service,
+        docs_service=object(),
+        max_events=5,
+        fetch_doc_text=fake_fetch_doc_text,
     )
 
     assert len(contexts) == 1
@@ -55,16 +58,76 @@ def test_build_event_contexts_assembles_docs_for_attachment_event(
     assert fetched_ids == ["attachment-doc-id"]
 
 
-def test_build_event_contexts_no_material_does_not_raise(event_with_no_material):
-    calendar_service = FakeCalendarService([event_with_no_material])
+def test_build_event_contexts_requests_only_needed_event_fields():
+    calendar_service = FakeCalendarService([])
 
-    contexts = asyncio.run(
-        build_event_contexts(
-            calendar_service,
-            docs_service=object(),
-            max_events=5,
-            fetch_doc_text=lambda *a, **kw: "unused",
-        )
+    build_event_contexts(calendar_service, docs_service=object())
+
+    assert calendar_service.events().list_kwargs["fields"] == EVENT_LIST_FIELDS
+
+
+def test_build_event_contexts_sends_only_allowlisted_event_fields():
+    event = {
+        "summary": "Vendor call",
+        "start": {"dateTime": "2026-10-29T10:00:00+09:00"},
+        "end": {"dateTime": "2026-10-29T11:00:00+09:00"},
+        "description": "Agenda",
+        "attendees": [{"email": "someone@example.com"}],
+        "organizer": {"email": "boss@example.com"},
+        "hangoutLink": "https://meet.google.com/abc",
+        "attachments": [],
+    }
+
+    contexts = build_event_contexts(
+        FakeCalendarService([event]),
+        docs_service=object(),
+        fetch_doc_text=lambda *a, **kw: "unused",
+    )
+
+    assert set(contexts[0]["event"]) == {"summary", "start", "end", "description"}
+
+
+def test_project_event_truncates_long_description():
+    view = project_event({"description": "x" * (MAX_DESCRIPTION_CHARS + 10)})
+
+    assert view["description"] == "x" * MAX_DESCRIPTION_CHARS + "…"
+
+
+def test_build_event_contexts_marks_failed_doc_and_keeps_going():
+    doc = "application/vnd.google-apps.document"
+    events = [
+        {
+            "summary": "Two docs",
+            "attachments": [
+                {"fileId": "broken", "mimeType": doc},
+                {"fileId": "ok", "mimeType": doc},
+            ],
+        },
+        {"summary": "Next event", "attachments": []},
+    ]
+
+    def fake_fetch_doc_text(service, document_id, max_chars=4000):
+        return None if document_id == "broken" else "body"
+
+    contexts = build_event_contexts(
+        FakeCalendarService(events),
+        docs_service=object(),
+        fetch_doc_text=fake_fetch_doc_text,
+    )
+
+    assert contexts[0]["docs"] == [
+        {"id": "broken", "error": "fetch_failed"},
+        {"id": "ok", "text": "body"},
+    ]
+    assert contexts[1]["event"]["summary"] == "Next event"
+
+
+def test_build_event_contexts_no_material_does_not_raise(event_with_no_material):
+    contexts = build_event_contexts(
+        FakeCalendarService([event_with_no_material]),
+        docs_service=object(),
+        max_events=5,
+        fetch_doc_text=lambda *a, **kw: "unused",
     )
 
     assert len(contexts) == 1
@@ -81,15 +144,12 @@ def test_build_event_contexts_caps_docs_per_event_at_two():
             for i in range(5)
         ],
     }
-    calendar_service = FakeCalendarService([event])
 
-    contexts = asyncio.run(
-        build_event_contexts(
-            calendar_service,
-            docs_service=object(),
-            max_events=5,
-            fetch_doc_text=lambda service, document_id, max_chars=4000: document_id,
-        )
+    contexts = build_event_contexts(
+        FakeCalendarService([event]),
+        docs_service=object(),
+        max_events=5,
+        fetch_doc_text=lambda service, document_id, max_chars=4000: document_id,
     )
 
     assert len(contexts[0]["docs"]) == 2

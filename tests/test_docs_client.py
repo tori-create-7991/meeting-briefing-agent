@@ -9,7 +9,7 @@ class FakeDocumentsGet:
         self._document = document
         self._error = error
 
-    def execute(self):
+    def execute(self, num_retries=0):
         if self._error:
             raise self._error
         return self._document
@@ -33,13 +33,23 @@ class FakeDocsService:
         return FakeDocuments(self._document, self._error)
 
 
-def test_fetch_doc_text_returns_empty_string_on_http_error():
+def test_fetch_doc_text_returns_none_on_http_error():
     error = HttpError(httplib2.Response({"status": 404}), b"not found")
     service = FakeDocsService(error=error)
 
-    result = fetch_doc_text(service, "missing-doc-id")
+    assert fetch_doc_text(service, "missing-doc-id") is None
 
-    assert result == ""
+
+def test_fetch_doc_text_returns_none_on_network_timeout():
+    service = FakeDocsService(error=TimeoutError("timed out"))
+
+    assert fetch_doc_text(service, "slow-doc-id") is None
+
+
+def test_fetch_doc_text_returns_empty_string_for_empty_document():
+    service = FakeDocsService(document={"body": {"content": []}})
+
+    assert fetch_doc_text(service, "empty-doc-id") == ""
 
 
 def test_fetch_doc_text_flattens_paragraph_text_runs():

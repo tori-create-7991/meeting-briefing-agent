@@ -1,28 +1,31 @@
 import re
 
-DOC_URL_RE = re.compile(r"docs\.google\.com/document/d/([\w-]+)")
+# Matches /document/d/<id> and the account-scoped /document/u/<n>/d/<id>.
+DOC_URL_RE = re.compile(r"docs\.google\.com/document/(?:u/\d+/)?d/([\w-]+)")
 GOOGLE_DOC_MIMETYPE = "application/vnd.google-apps.document"
+
+
+def _dedup(ids: list[str]) -> list[str]:
+    return list(dict.fromkeys(ids))
 
 
 def extract_doc_ids_from_description(description: str | None) -> list[str]:
     if not description:
         return []
-    ids: list[str] = []
-    for match in DOC_URL_RE.finditer(description):
-        doc_id = match.group(1)
-        if doc_id not in ids:
-            ids.append(doc_id)
-    return ids
+    return _dedup([match.group(1) for match in DOC_URL_RE.finditer(description)])
 
 
 def extract_doc_ids_from_attachments(attachments: list[dict] | None) -> list[str]:
     if not attachments:
         return []
-    return [
-        attachment["fileId"]
-        for attachment in attachments
-        if attachment.get("mimeType") == GOOGLE_DOC_MIMETYPE and attachment.get("fileId")
-    ]
+    return _dedup(
+        [
+            attachment["fileId"]
+            for attachment in attachments
+            if attachment.get("mimeType") == GOOGLE_DOC_MIMETYPE
+            and attachment.get("fileId")
+        ]
+    )
 
 
 def resolve_doc_ids(event: dict) -> list[str]:

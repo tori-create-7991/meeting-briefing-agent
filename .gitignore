@@ -1,8 +1,14 @@
 .worktrees/
 
+# OAuth client secrets and cached tokens — never commit
 credentials.json
+client_secret*.json
 token.json
+token.json.tmp
 .env
+.env.*
+!.env.example
+
 __pycache__/
 *.pyc
 .venv/

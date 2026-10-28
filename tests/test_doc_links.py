@@ -48,3 +48,18 @@ def test_resolve_doc_ids_falls_back_to_description_when_no_attachments(
 
 def test_resolve_doc_ids_returns_empty_when_neither_present(event_with_no_material):
     assert resolve_doc_ids(event_with_no_material) == []
+
+
+def test_extract_doc_ids_from_description_matches_account_scoped_url():
+    description = "Notes: https://docs.google.com/document/u/0/d/scoped123/edit"
+    assert extract_doc_ids_from_description(description) == ["scoped123"]
+
+
+def test_extract_doc_ids_from_attachments_dedups_preserving_order():
+    doc = "application/vnd.google-apps.document"
+    attachments = [
+        {"fileId": "a", "mimeType": doc},
+        {"fileId": "b", "mimeType": doc},
+        {"fileId": "a", "mimeType": doc},
+    ]
+    assert extract_doc_ids_from_attachments(attachments) == ["a", "b"]
