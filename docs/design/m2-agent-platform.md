@@ -33,7 +33,7 @@
 | D13 | ローカル開発 | M1 のブラウザ同意（`credentials.json` / `token.json`）を `WORKSPACE_AUTH=local_oauth` として残す | 手元で手軽に動かせる | 委任のみ |
 | D14 | Drive スコープ | 外す | 呼んでいない。最も厳しく扱われる区分のスコープ。添付の fileId はそのまま Docs の ID として使える | 残す |
 | D15 | 実行の ID | Agent Identity。足す権限は `workspace-reader` に対する `iam.serviceAccounts.signBlob` だけ（その SA の上でだけ付ける）。Gemini は既定の権限で呼ぶ | エージェント専用の ID で、共有も成り代わりも鍵も無い。Google は project 全体の権限を付けないよう案内している | 専用 SA（予備として変数 `runtime_identity` で切り替え可能にする） |
-| D16 | MCP 入口の認証 | Cloud Run の IAM（`run.invoker` は本人だけ）。Claude Code は `headersHelper` で `gcloud auth print-identity-token` を付ける | 公開範囲がゼロのまま。アプリ側に認証コードが要らない | アプリ側 OAuth / IAP |
+| D16 | MCP 入口の認証 | Cloud Run の IAM（`run.invoker` は本人だけ）。Claude Code は user スコープの `headersHelper`（`scripts/mcp_headers.sh --account`）で本人の ID トークンを付ける。期限切れは 401/403 で Claude Code が helper を再実行して取り直す | 公開範囲がゼロのまま。アプリ側に認証コードが要らない | アプリ側 OAuth / IAP |
 | D17 | MCP 入口の実装 | Python の FastMCP。状態を持たない Streamable HTTP（`/mcp`）。実行 ID は `mcp-front` SA で、Agent Runtime を呼ぶ権限だけ | エージェント本体と同じ言語。Cloud Run の公式手順に沿う | TypeScript |
 | D18 | 観測・評価 | `AdkApp(enable_tracing=True)` で Cloud Trace。評価は 3 ケースのテスト集を `adk eval` で手動実行 | 目的が習得と発信。LLM を呼ぶ評価は結果がぶれるので CI には入れない | 評価なし / CI で評価 |
 
@@ -124,4 +124,4 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 | Dockerfile | `Dockerfile.mcp` | `Dockerfile` と `.gcloudignore` | `gcloud builds submit --tag` は `./Dockerfile` しか使えない |
 | Agent Runtime の台数 | 指定なし | `agent_min_instances = 0`、`agent_max_instances = 2` | 呼び出し時だけ動かすので待機中の課金を避ける。0 が拒否されたら 1 にする |
 | プロジェクト ID | 既定値あり | 既定値なし（`terraform.tfvars` で必須） | 公開リポジトリに組織固有の値を置かない |
-
+| headersHelper | `gcloud auth print-identity-token` を呼ぶだけ | gcloud と Python 3.10+ を自分で探す。`--account` で使うアカウントを固定。`--impersonate` でサービスアカウントとして呼ぶ道も用意（audience は Cloud Run の URL）。スクリプトは安定した場所に置き、user スコープで登録する | helper はログインシェルの PATH なしで動き得る（最小の PATH だと gcloud がシステムの Python 3.9 を拾い起動に失敗するのを確認）。gcloud の設定が複数あると、別アカウントのトークンで 403 になる |

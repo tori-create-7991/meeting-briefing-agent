@@ -132,13 +132,42 @@ agent's identity can sign as it, and only for these two read-only scopes.
 terraform -chdir=infra/main output -raw mcp_url
 ```
 
+Claude Code gets the Authorization header from `scripts/mcp_headers.sh`
+(its `headersHelper`), which prints your Google ID token. Copy the script
+to a stable place first: Claude Code runs it by absolute path, and a path
+inside a temporary worktree breaks once that worktree is removed.
+
 ```bash
-claude mcp add-json meeting-briefing '{"type":"http","url":"<mcp_url>","headersHelper":"<absolute path to>/scripts/mcp_headers.sh"}'
+mkdir -p ~/.claude/bin && cp scripts/mcp_headers.sh ~/.claude/bin/briefing-mcp-headers.sh
 ```
 
-`scripts/mcp_headers.sh` sends your Google ID token
-(`gcloud auth print-identity-token`). Your account must be in
-`invoker_members`.
+Register the server in **user scope**, with your account (the one in
+`invoker_members`) pinned:
+
+```bash
+claude mcp add-json meeting-briefing '{"type":"http","url":"<mcp_url>","headersHelper":"'"$HOME"'/.claude/bin/briefing-mcp-headers.sh --account me@example.org"}' --scope user
+```
+
+How the helper behaves:
+
+- Claude Code runs it when connecting and reconnecting, and again
+  automatically after a 401 or 403, then retries the tool call once. The ID
+  token expires after an hour; this refresh needs no setup.
+- It must finish within 10 seconds; `gcloud` takes 1-2.
+- `--account` picks the gcloud account even when another gcloud
+  configuration is active. Without it, the active account is used.
+- The helper may run without your login shell's `PATH`. The script finds
+  `gcloud` and a Python 3.10+ for it (PATH, then mise and Homebrew
+  locations); pass `--gcloud /path/to/gcloud` if it still cannot.
+- User scope matters: for a project `.mcp.json`, Claude Code strips
+  environment variables whose names contain `TOKEN`, `KEY` or `AUTH` and
+  runs the helper in the project directory.
+
+To call as a service account instead of yourself, add it to
+`invoker_members` (`serviceAccount:...`), grant yourself
+`roles/iam.serviceAccountTokenCreator` on it, and use
+`--impersonate <service account email>` instead of `--account`. The script
+then requests a token whose audience is the Cloud Run URL.
 
 ## 8. Check it works
 
@@ -160,6 +189,8 @@ project and look for the agent's spans.
 
 | Symptom in the tool result | Fix |
 |---|---|
+| `/mcp` shows the server as failed to connect | The token was rejected at connect time. Run the helper command by hand to see gcloud's error, fix it (sign in again, `--account`, `--gcloud`), then reconnect from `/mcp` |
+| `/mcp` shows the server as needing authentication | A new token was still refused: the account is not in `invoker_members`, or `--account` names another account |
 | "cannot sign as the workspace-reader service account" | Agent Identity could not get `signBlob`. Set `runtime_identity = "service_account"` and apply: the agent then runs as the dedicated `briefing-runtime` service account |
 | "Domain-wide delegation is not authorized" | Step 6 is missing, or the client ID or scopes differ |
 | Model not found | Set `briefing_model` to a Gemini model available in the region |
