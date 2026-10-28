@@ -1,4 +1,5 @@
-# Cloud Run image for the MCP front (meeting_briefing_mcp).
+# Cloud Run image for the MCP front (meeting_briefing_mcp). The agent itself
+# runs on Agent Runtime from source (scripts/build_agent_source.sh).
 FROM python:3.12-slim
 
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /bin/uv

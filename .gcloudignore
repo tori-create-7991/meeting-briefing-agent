@@ -1,0 +1,10 @@
+# Uploaded by `gcloud builds submit` (scripts/build_mcp_image.sh): only what
+# the Dockerfile needs.
+*
+!Dockerfile
+!.dockerignore
+!pyproject.toml
+!uv.lock
+!src/
+!src/**
+**/__pycache__

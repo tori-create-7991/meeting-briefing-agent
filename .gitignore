@@ -15,3 +15,10 @@ __pycache__/
 .pytest_cache/
 dist/
 *.egg-info/
+
+# Terraform state and local settings (real IDs live only in terraform.tfvars)
+infra/**/.terraform/
+infra/**/.terraform.lock.hcl.bak
+infra/**/*.tfstate
+infra/**/*.tfstate.*
+infra/**/terraform.tfvars
