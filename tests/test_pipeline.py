@@ -1,7 +1,10 @@
 from meeting_briefing_agent.calendar_client import EVENT_LIST_FIELDS
+import pytest
+
 from meeting_briefing_agent.pipeline import (
     MAX_DESCRIPTION_CHARS,
     build_event_contexts,
+    day_window,
     project_event,
 )
 
@@ -166,3 +169,34 @@ def test_build_event_contexts_caps_docs_per_event_at_two():
     )
 
     assert len(contexts[0]["docs"]) == 2
+
+
+def test_day_window_covers_the_whole_day_in_the_timezone():
+    assert day_window("2026-10-29", "Asia/Tokyo") == (
+        "2026-10-29T00:00:00+09:00",
+        "2026-10-30T00:00:00+09:00",
+    )
+
+
+def test_day_window_rejects_bad_date():
+    with pytest.raises(ValueError):
+        day_window("10/29", "Asia/Tokyo")
+
+
+def test_build_event_contexts_with_date_lists_only_that_day(monkeypatch):
+    monkeypatch.delenv("BRIEFING_TIMEZONE", raising=False)
+    calendar_service = FakeCalendarService([])
+
+    build_event_contexts(calendar_service, docs_service=object(), date="2026-10-29")
+
+    kwargs = calendar_service.events().list_kwargs
+    assert kwargs["timeMin"] == "2026-10-29T00:00:00+09:00"
+    assert kwargs["timeMax"] == "2026-10-30T00:00:00+09:00"
+
+
+def test_build_event_contexts_without_date_has_no_upper_bound():
+    calendar_service = FakeCalendarService([])
+
+    build_event_contexts(calendar_service, docs_service=object())
+
+    assert "timeMax" not in calendar_service.events().list_kwargs
