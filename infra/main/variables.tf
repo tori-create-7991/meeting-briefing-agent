@@ -65,6 +65,18 @@ variable "briefing_timezone" {
   default     = "Asia/Tokyo"
 }
 
+variable "agent_min_instances" {
+  description = "Minimum Agent Runtime instances. 0 avoids idle cost at the price of cold starts."
+  type        = number
+  default     = 0
+}
+
+variable "agent_max_instances" {
+  description = "Maximum Agent Runtime instances."
+  type        = number
+  default     = 2
+}
+
 variable "runtime_identity" {
   description = "agent_identity (default) or service_account (fallback: a dedicated briefing-runtime service account)."
   type        = string

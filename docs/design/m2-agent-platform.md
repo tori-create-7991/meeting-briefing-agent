@@ -29,10 +29,10 @@
 | D9 | IaC | Terraform を 2 段に分ける。`infra/bootstrap`（プロジェクトと状態用バケット、状態は手元）、`infra/main`（残り全部、状態は GCS） | プロジェクトが無いうちはその中にバケットを作れない | スクリプト / 状態を手元だけに置く |
 | D10 | GCP プロジェクト | 組織の下に専用プロジェクトを新しく作る（ID は `terraform.tfvars` で指定）。請求先は既存の請求先アカウント | 他の用途と権限が混ざらない。作り直しや片付けが簡単。請求先が同じなので無料枠は変わらない | 既存プロジェクトに同居 |
 | D11 | 読むアカウント | 本人の Workspace アカウント（`workspace_subject`） | 委任は Workspace のユーザーにしか使えない | 個人の Gmail |
-| D12 | Workspace の認証 | 鍵なしのドメイン全体の委任。委任用 SA `workspace-reader` が IAM の signJwt で署名し、`subject` を本人に固定。スコープは `calendar.readonly` と `documents.readonly` のみ | 保存する秘密がゼロ、更新作業も無い。同意画面を Terraform で作れない問題も消える | refresh token を Secret Manager に置く |
+| D12 | Workspace の認証 | 鍵なしのドメイン全体の委任。委任用 SA `workspace-reader` が IAM の signBlob で署名し、`subject` を本人に固定。スコープは `calendar.readonly` と `documents.readonly` のみ | 保存する秘密がゼロ、更新作業も無い。同意画面を Terraform で作れない問題も消える | refresh token を Secret Manager に置く |
 | D13 | ローカル開発 | M1 のブラウザ同意（`credentials.json` / `token.json`）を `WORKSPACE_AUTH=local_oauth` として残す | 手元で手軽に動かせる | 委任のみ |
 | D14 | Drive スコープ | 外す | 呼んでいない。最も厳しく扱われる区分のスコープ。添付の fileId はそのまま Docs の ID として使える | 残す |
-| D15 | 実行の ID | Agent Identity。足す権限は `workspace-reader` に対する `iam.serviceAccounts.signJwt` だけ（その SA の上でだけ付ける）。Gemini は既定の権限で呼ぶ | エージェント専用の ID で、共有も成り代わりも鍵も無い。Google は project 全体の権限を付けないよう案内している | 専用 SA（予備として変数 `runtime_identity` で切り替え可能にする） |
+| D15 | 実行の ID | Agent Identity。足す権限は `workspace-reader` に対する `iam.serviceAccounts.signBlob` だけ（その SA の上でだけ付ける）。Gemini は既定の権限で呼ぶ | エージェント専用の ID で、共有も成り代わりも鍵も無い。Google は project 全体の権限を付けないよう案内している | 専用 SA（予備として変数 `runtime_identity` で切り替え可能にする） |
 | D16 | MCP 入口の認証 | Cloud Run の IAM（`run.invoker` は本人だけ）。Claude Code は `headersHelper` で `gcloud auth print-identity-token` を付ける | 公開範囲がゼロのまま。アプリ側に認証コードが要らない | アプリ側 OAuth / IAP |
 | D17 | MCP 入口の実装 | Python の FastMCP。状態を持たない Streamable HTTP（`/mcp`）。実行 ID は `mcp-front` SA で、Agent Runtime を呼ぶ権限だけ | エージェント本体と同じ言語。Cloud Run の公式手順に沿う | TypeScript |
 | D18 | 観測・評価 | `AdkApp(enable_tracing=True)` で Cloud Trace。評価は 3 ケースのテスト集を `adk eval` で手動実行 | 目的が習得と発信。LLM を呼ぶ評価は結果がぶれるので CI には入れない | 評価なし / CI で評価 |
@@ -46,11 +46,11 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
                                     Agent Runtime: meeting-briefing-agent
                                       SequentialAgent
                                         ├ ContextFetcher（LLM なし）
-                                        │    credentials.py → 鍵なしの委任（IAM signJwt）
+                                        │    credentials.py → 鍵なしの委任（IAM signBlob）
                                         │    pipeline → Calendar API / Docs API
                                         └ BriefingWriter（LlmAgent, Vertex AI Gemini）
                                       実行 ID: Agent Identity
-                                                    │ signJwt（workspace-reader の上でだけ）
+                                                    │ signBlob（workspace-reader の上でだけ）
                                                     ▼
                                     workspace-reader SA（GCP の権限ゼロ）
                                                     │ Workspace 管理コンソールで 2 スコープのみ許可
@@ -70,7 +70,7 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 
 | 失敗 | 動き |
 |---|---|
-| 委任の署名が拒否される（signJwt の権限なし） | `ContextFetcher` が「workspace-reader に対する signJwt 権限がない」と分かるメッセージで失敗し、MCP のエラーとして返る |
+| 委任の署名が拒否される（signBlob の権限なし） | `ContextFetcher` が「workspace-reader に対する signBlob 権限がない」と分かるメッセージで失敗し、MCP のエラーとして返る |
 | Workspace で委任が許可されていない（`unauthorized_client`） | 「管理コンソールで client ID <id> に 2 スコープを許可する」と案内するメッセージ |
 | ドキュメントの取得に失敗 | M1 と同じく警告を出して空文字で続行 |
 | `date` の形式が不正 | MCP 入口で検証し、`YYYY-MM-DD` を求めるエラーを返す（Agent Runtime を呼ばない） |
@@ -108,3 +108,20 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 - Gmail ユーザー向けの refresh token 方式 — OSS で必要になったら追加
 - 費用アラート（予算）の自動設定 — 請求先アカウントの権限が絡む。`docs/deploy.md` で手作業として案内する
 - ドキュメント内の表の読み取り — M1 からの既知の制限
+
+## 実装で変えた点
+
+実装中に分かった事実に合わせて、次の点を設計から変えた。
+
+| 点 | 設計時 | 実装 | 理由 |
+|---|---|---|---|
+| 委任の署名に使う権限 | `iam.serviceAccounts.signJwt` | `iam.serviceAccounts.signBlob`（`workspace-reader` の上でだけ付与） | `google.auth.iam.Signer` は IAM Credentials の signBlob API を呼ぶ |
+| Agent Runtime の `class_methods` | 指定なし | `scripts/gen_class_methods.py` で AdkApp から生成し、Terraform に渡す | ソースから載せるときは必須（SDK も自動生成して送っている） |
+| MCP の実装 | `FastMCP` | `mcp` 2.x の `MCPServer`。入力エラーと Agent Runtime の失敗は `ToolError` で返す | 2.x で改名。普通の例外は「Error executing tool」だけに丸められ、原因が呼び出し側に届かない |
+| MCP の Host 検査 | — | `host="0.0.0.0"` でアプリを作る | localhost 向けの自動 Host 検査が Cloud Run のホスト名を弾くため。認証は Cloud Run の IAM が担う |
+| 呼び出し元の `user_id` | 呼び出し元のメールアドレス | Cloud Run が検証済みの ID トークンから email を取り出す。取れなければ `anonymous` | セッションのラベルにしか使わず、認可には使わない |
+| 執筆担当の指示文 | `{briefing_contexts}` の差し込み | InstructionProvider で組み立て、データは `<briefing_contexts>` タグで囲む | ADK の `{...}` 差し込みが予定本文の波括弧を誤解しないようにする |
+| Dockerfile | `Dockerfile.mcp` | `Dockerfile` と `.gcloudignore` | `gcloud builds submit --tag` は `./Dockerfile` しか使えない |
+| Agent Runtime の台数 | 指定なし | `agent_min_instances = 0`、`agent_max_instances = 2` | 呼び出し時だけ動かすので待機中の課金を避ける。0 が拒否されたら 1 にする |
+| プロジェクト ID | 既定値あり | 既定値なし（`terraform.tfvars` で必須） | 公開リポジトリに組織固有の値を置かない |
+

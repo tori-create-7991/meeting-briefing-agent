@@ -24,6 +24,10 @@ resource "google_vertex_ai_reasoning_engine" "agent" {
     }
 
     deployment_spec {
+      # Scale to zero between calls; this agent is only called on demand.
+      min_instances = var.agent_min_instances
+      max_instances = var.agent_max_instances
+
       # GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION and GOOGLE_CLOUD_AGENT_ENGINE*
       # are reserved and set by the runtime.
       env {

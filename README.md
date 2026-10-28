@@ -1,26 +1,50 @@
 # meeting-briefing-agent
 
-An [ADK](https://google.github.io/adk-docs/) agent that reads your upcoming
-Google Calendar events, pulls in related Google Docs material, and drafts a
-short pre-meeting briefing.
+An [ADK](https://google.github.io/adk-docs/) agent that reads your Google
+Calendar events, pulls in related Google Docs material, and drafts a short
+pre-meeting briefing.
 
-> **Status: Milestone 1 (local verification only).** This runs locally via
-> ADK's `InMemoryRunner`. Deployment to Vertex AI Agent Engine, Cloud
-> Scheduler automation, and real Memory Bank (past-meeting-trends) wiring
-> are planned for later milestones and not implemented yet.
+> **Status: Milestone 2.** The agent runs locally, or on Gemini Enterprise
+> Agent Platform's Agent Runtime behind a Cloud Run MCP server that Claude
+> Code can call. Scheduled runs and past-meeting trends are planned for
+> later milestones.
 
-## Prerequisites
+## How it works
 
-- Python 3.10+ on macOS or Linux
-- [uv](https://docs.astral.sh/uv/)
+```
+Claude Code ──(ID token)──▶ Cloud Run: MCP front (get_briefing)
+                                   │
+                                   ▼
+                     Agent Runtime: SequentialAgent
+                       ├ ContextFetcher  (no LLM) Calendar + Docs
+                       └ BriefingWriter  (Gemini)  one briefing for all events
+```
+
+- `ContextFetcher` lists the events for a day (or upcoming events), finds
+  linked or attached Google Docs, and reads their text. It sends nothing to
+  the model itself.
+- `BriefingWriter` writes one briefing with a section per event, in
+  `BRIEFING_LANGUAGE`.
+- Deployed, the agent reads Workspace through keyless domain-wide
+  delegation: no service account key and no stored refresh token.
+
+Deployment: [docs/deploy.md](docs/deploy.md). Design decisions:
+[docs/design/m2-agent-platform.md](docs/design/m2-agent-platform.md).
+
+## Run locally
+
+### Prerequisites
+
+- Python 3.10+ on macOS or Linux, and [uv](https://docs.astral.sh/uv/)
 - A GCP project of your own with the Google Calendar API and Google Docs
   API enabled
 - An OAuth 2.0 **Desktop app** client created in that project, with the
   client secret downloaded as `credentials.json`
-- A Gemini API key from [AI Studio](https://aistudio.google.com/apikey).
-  Read [Data handling](#data-handling) before choosing the free tier.
+- Gemini access: a Gemini API key from
+  [AI Studio](https://aistudio.google.com/apikey), or Vertex AI. Read
+  [Data handling](#data-handling) before choosing the free tier.
 
-## Install
+### Install
 
 ```bash
 uv sync --locked --extra dev
@@ -29,7 +53,7 @@ uv sync --locked --extra dev
 `uv.lock` pins every dependency, including transitive ones. Use it rather
 than `pip install` so you get the reviewed versions.
 
-## Configure
+### Configure
 
 ```bash
 cp .env.example .env
@@ -43,34 +67,33 @@ GOOGLE_API_KEY=<your AI Studio key>
 
 `GEMINI_API_KEY` works too. If both are set, `GOOGLE_API_KEY` wins.
 
-Optional settings:
-
 | Variable | Default | Meaning |
 |---|---|---|
-| `BRIEFING_MODEL` | `gemini-2.5-flash` | Gemini model ID |
-| `CALENDAR_MAX_EVENTS` | `5` | Number of upcoming events (1-50) |
+| `BRIEFING_MODEL` | `gemini-3.5-flash` | Gemini model ID |
+| `BRIEFING_LANGUAGE` | `ja` | Language the briefing is written in |
+| `BRIEFING_TIMEZONE` | `Asia/Tokyo` | Timezone that `--date` refers to |
 | `CALENDAR_ID` | `primary` | Calendar to read |
+| `WORKSPACE_AUTH` | `local_oauth` | `local_oauth` (browser consent) or `dwd` (domain-wide delegation, used when deployed) |
 | `GOOGLE_GENAI_USE_VERTEXAI` | `FALSE` | `TRUE` to call Gemini through Vertex AI instead of an API key |
 
 Place your OAuth client secret at the repo root as `credentials.json`.
 `credentials.json`, `client_secret*.json`, `token.json` and `.env` are
 gitignored — never commit them.
 
-## Run
+### Run
 
 ```bash
-uv run python -m meeting_briefing_agent.main
+uv run python -m meeting_briefing_agent.main --date 2026-10-29
 ```
+
+Without `--date`, it briefs upcoming events from now on. `--max-events`
+(1-20, default 5) limits how many.
 
 The first run opens a browser window for Google OAuth consent and caches
 the resulting token to `token.json` (permissions `0600`). Subsequent runs
 reuse it. If the cached token can no longer be refreshed — for example
 because your OAuth client is in "Testing" status, where refresh tokens
 expire after 7 days — the consent screen opens again automatically.
-
-The agent prints a briefing for each of your upcoming Calendar events to
-stdout. If one event fails (a rate limit, a network error), the others are
-still printed and the command exits with status 1.
 
 The agent requests read-only access to Calendar and Docs only. If you ran
 an earlier version that also requested Drive access, delete `token.json`
@@ -99,7 +122,8 @@ Where that data goes depends on how you call Gemini:
   contain confidential or other people's personal information.
 - **Gemini API paid tier:** prompts are not used to improve Google's
   products, but are logged for a limited time for abuse monitoring.
-- **Vertex AI:** covered by the Google Cloud terms instead; see
+- **Vertex AI** (always used when deployed): covered by the Google Cloud
+  terms instead; see
   [Vertex AI data governance](https://cloud.google.com/vertex-ai/generative-ai/docs/data-governance).
 
 Check the current
@@ -108,7 +132,7 @@ before use.
 
 Event descriptions and documents can be written by people outside your
 organization. The agent treats them as data and has no tools, so it can
-only print text; still, read briefings with that in mind.
+only return text; still, read briefings with that in mind.
 
 ## Test
 
@@ -116,11 +140,12 @@ only print text; still, read briefings with that in mind.
 uv run pytest
 ```
 
+The briefing quality evaluation calls Gemini and is run by hand; see
+[tests/eval/README.md](tests/eval/README.md).
+
 ## Roadmap
 
-- Deploy to Vertex AI Agent Engine
-- Keyless Workspace access for the deployed agent
-- Daily automated runs via Cloud Scheduler
+- Scheduled daily briefings and a delivery channel
 - Past-meeting-trend context via Vertex AI Memory Bank
 
 ## License
