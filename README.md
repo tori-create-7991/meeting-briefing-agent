@@ -41,6 +41,8 @@ Fill in `.env`:
 GOOGLE_API_KEY=<your AI Studio key>
 ```
 
+`GEMINI_API_KEY` works too. If both are set, `GOOGLE_API_KEY` wins.
+
 Optional settings:
 
 | Variable | Default | Meaning |

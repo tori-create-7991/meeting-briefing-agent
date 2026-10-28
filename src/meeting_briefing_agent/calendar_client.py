@@ -2,8 +2,9 @@ import datetime
 
 from googleapiclient.discovery import build
 
-# Only request the fields the pipeline uses. Attendees, organizer,
-# conference links and the like never leave the Calendar API.
+# Only request the fields the pipeline uses. Attendees, organizer and
+# conference data are never fetched. The description is still sent to the
+# model as written, including any links pasted into it.
 EVENT_LIST_FIELDS = (
     "items(summary,start,end,description,attachments(fileId,mimeType))"
 )

@@ -76,6 +76,14 @@ def test_run_briefings_strips_terminal_control_characters_from_titles():
     assert "\x1b" not in lines[0]
 
 
+def test_run_briefings_strips_terminal_control_characters_from_errors():
+    runner = FakeRunner([RuntimeError("bad\x1b[2Jthing")])
+
+    _, lines = run(runner, [context("Title")])
+
+    assert not any("\x1b" in line for line in lines)
+
+
 class RecordingRunner(FakeRunner):
     def __init__(self, replies):
         super().__init__(replies)
