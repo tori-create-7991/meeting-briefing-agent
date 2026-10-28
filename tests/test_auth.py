@@ -71,7 +71,7 @@ def test_save_token_sets_0600_on_new_file(tmp_path):
 
     assert file_mode(token_path) == 0o600
     assert token_path.read_text() == '{"token": "fake"}'
-    assert not (tmp_path / "token.json.tmp").exists()
+    assert list(tmp_path.glob(".token-*.tmp")) == []
 
 
 def test_save_token_tightens_permissions_on_pre_existing_file(tmp_path):
@@ -82,6 +82,21 @@ def test_save_token_tightens_permissions_on_pre_existing_file(tmp_path):
     _save_token(FakeCreds(), str(token_path))
 
     assert file_mode(token_path) == 0o600
+
+
+def test_save_token_leaves_existing_token_untouched_when_write_fails(tmp_path):
+    token_path = tmp_path / "token.json"
+    token_path.write_text('{"token": "old"}')
+
+    class BrokenCreds:
+        def to_json(self):
+            raise RuntimeError("serialization failed")
+
+    with pytest.raises(RuntimeError):
+        _save_token(BrokenCreds(), str(token_path))
+
+    assert token_path.read_text() == '{"token": "old"}'
+    assert list(tmp_path.glob(".token-*.tmp")) == []
 
 
 def test_get_credentials_explains_missing_client_secret(tmp_path):

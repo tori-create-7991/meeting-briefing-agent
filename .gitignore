@@ -4,7 +4,7 @@
 credentials.json
 client_secret*.json
 token.json
-token.json.tmp
+.token-*.tmp
 .env
 .env.*
 !.env.example

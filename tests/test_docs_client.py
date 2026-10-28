@@ -1,4 +1,8 @@
+import http.client
+
 import httplib2
+import pytest
+from google.auth.exceptions import TransportError
 from googleapiclient.errors import HttpError
 
 from meeting_briefing_agent.docs_client import fetch_doc_text
@@ -40,8 +44,17 @@ def test_fetch_doc_text_returns_none_on_http_error():
     assert fetch_doc_text(service, "missing-doc-id") is None
 
 
-def test_fetch_doc_text_returns_none_on_network_timeout():
-    service = FakeDocsService(error=TimeoutError("timed out"))
+@pytest.mark.parametrize(
+    "error",
+    [
+        TimeoutError("timed out"),
+        http.client.IncompleteRead(b""),
+        httplib2.HttpLib2Error("connection reset"),
+        TransportError("tls failure"),
+    ],
+)
+def test_fetch_doc_text_returns_none_on_network_errors(error):
+    service = FakeDocsService(error=error)
 
     assert fetch_doc_text(service, "slow-doc-id") is None
 

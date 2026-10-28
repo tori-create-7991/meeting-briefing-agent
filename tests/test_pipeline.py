@@ -9,8 +9,10 @@ from meeting_briefing_agent.pipeline import (
 class FakeEventsList:
     def __init__(self, items):
         self._items = items
+        self.num_retries = None
 
     def execute(self, num_retries=0):
+        self.num_retries = num_retries
         return {"items": self._items}
 
 
@@ -21,7 +23,8 @@ class FakeEvents:
 
     def list(self, **kwargs):
         self.list_kwargs = kwargs
-        return FakeEventsList(self._items)
+        self.last_list = FakeEventsList(self._items)
+        return self.last_list
 
 
 class FakeCalendarService:
@@ -58,12 +61,22 @@ def test_build_event_contexts_assembles_docs_for_attachment_event(
     assert fetched_ids == ["attachment-doc-id"]
 
 
-def test_build_event_contexts_requests_only_needed_event_fields():
+def test_event_list_fields_never_request_people_or_conference_data():
+    assert EVENT_LIST_FIELDS == (
+        "items(summary,start,end,description,attachments(fileId,mimeType))"
+    )
+    for field in ("attendees", "organizer", "creator", "conferenceData", "hangoutLink"):
+        assert field not in EVENT_LIST_FIELDS
+
+
+def test_build_event_contexts_requests_limited_fields_with_retries():
     calendar_service = FakeCalendarService([])
 
     build_event_contexts(calendar_service, docs_service=object())
 
-    assert calendar_service.events().list_kwargs["fields"] == EVENT_LIST_FIELDS
+    events = calendar_service.events()
+    assert events.list_kwargs["fields"] == EVENT_LIST_FIELDS
+    assert events.last_list.num_retries == 2
 
 
 def test_build_event_contexts_sends_only_allowlisted_event_fields():

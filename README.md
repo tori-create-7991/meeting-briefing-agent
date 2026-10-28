@@ -72,7 +72,8 @@ still printed and the command exits with status 1.
 
 The agent requests read-only access to Calendar and Docs only. If you ran
 an earlier version that also requested Drive access, delete `token.json`
-and consent again so the broader grant is dropped.
+and consent again, then remove the old grant at
+[Google Account → Third-party connections](https://myaccount.google.com/connections).
 
 ## Data handling
 
@@ -83,8 +84,10 @@ For each event, the agent sends the following to Gemini:
 - the text of up to two linked or attached Google Docs (each truncated to
   4,000 characters)
 
-It does **not** send attendees, organizer, conference links or other event
-fields; those are not even requested from the Calendar API.
+It does **not** send the attendees, organizer, conference data or other
+structured event fields; those are not even requested from the Calendar
+API. The description is sent as written, though, so anything pasted into
+it — a video-call link, a passcode, someone's email address — is sent too.
 
 Where that data goes depends on how you call Gemini:
 
@@ -92,8 +95,10 @@ Where that data goes depends on how you call Gemini:
   your prompts and responses to improve its products, and human reviewers
   may read them. Do not use the free tier with calendars or documents that
   contain confidential or other people's personal information.
-- **Gemini API paid tier or Vertex AI:** prompts are not used to improve
-  Google's products.
+- **Gemini API paid tier:** prompts are not used to improve Google's
+  products, but are logged for a limited time for abuse monitoring.
+- **Vertex AI:** covered by the Google Cloud terms instead; see
+  [Vertex AI data governance](https://cloud.google.com/vertex-ai/generative-ai/docs/data-governance).
 
 Check the current
 [Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms)

@@ -1,3 +1,4 @@
+import http.client
 import logging
 
 import httplib2
@@ -9,7 +10,13 @@ logger = logging.getLogger(__name__)
 
 # Failures that only affect the one document being fetched. Anything else
 # (for example an auth failure) is left to propagate.
-FETCH_ERRORS = (HttpError, OSError, httplib2.HttpLib2Error, TransportError)
+FETCH_ERRORS = (
+    HttpError,
+    OSError,
+    http.client.HTTPException,
+    httplib2.HttpLib2Error,
+    TransportError,
+)
 
 
 def build_docs_service(creds):

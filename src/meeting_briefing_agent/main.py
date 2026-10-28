@@ -37,10 +37,12 @@ def _read_max_events() -> int:
 
 def _check_model_config() -> None:
     use_vertex = os.getenv("GOOGLE_GENAI_USE_VERTEXAI", "").lower() in ("1", "true")
-    if not use_vertex and not os.getenv("GOOGLE_API_KEY"):
+    has_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    if not use_vertex and not has_key:
         raise SystemExit(
-            "GOOGLE_API_KEY is not set. Add it to .env (see README.md), or set "
-            "GOOGLE_GENAI_USE_VERTEXAI=TRUE to use Vertex AI instead."
+            "Neither GOOGLE_API_KEY nor GEMINI_API_KEY is set. Add one to .env "
+            "(see README.md), or set GOOGLE_GENAI_USE_VERTEXAI=TRUE to use "
+            "Vertex AI instead."
         )
 
 
@@ -51,7 +53,7 @@ async def generate_briefing(runner, context: dict) -> str:
     session = await runner.session_service.create_session(
         app_name=APP_NAME, user_id=USER_ID
     )
-    message = types.Content(role="user", parts=[types.Part(text=json.dumps(context))])
+    message = types.Content(role="user", parts=[types.Part(text=json.dumps(context, ensure_ascii=False))])
     texts: list[str] = []
     async for event in runner.run_async(
         user_id=USER_ID, session_id=session.id, new_message=message
@@ -79,7 +81,7 @@ async def run_briefings(runner, contexts: list[dict], out=print) -> int:
             briefing = await generate_briefing(runner, context)
         except Exception as exc:  # noqa: BLE001 - report and keep going
             failures += 1
-            out(f"[error] Could not generate this briefing: {exc}")
+            out(f"[error] Could not generate this briefing: {_clean(str(exc))}")
             continue
         out(_clean(briefing))
     return failures

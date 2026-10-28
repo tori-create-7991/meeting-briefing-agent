@@ -1,5 +1,7 @@
+import contextlib
 import logging
 import os
+import tempfile
 
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -15,22 +17,21 @@ SCOPES = [
 
 
 def _save_token(creds: Credentials, token_path: str) -> None:
-    # Write to a 0600 temp file, then atomically replace token.json. The
+    # Write to a fresh 0600 temp file in the same directory (mkstemp uses
+    # O_EXCL and a unique name), then atomically replace token.json. The
     # replaced file takes the temp file's permissions, so a pre-existing
-    # token.json with looser permissions ends up 0600 too, and a crash
-    # mid-write can never leave a half-written token.json behind.
-    tmp_path = f"{token_path}.tmp"
-    fd = os.open(tmp_path, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600)
+    # token.json with looser permissions ends up 0600 too, and a failed
+    # write never leaves a half-written token.json behind.
+    directory = os.path.dirname(token_path) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".token-", suffix=".tmp")
     try:
-        if hasattr(os, "fchmod"):  # not available on Windows before 3.13
-            os.fchmod(fd, 0o600)
-        token_file = os.fdopen(fd, "w")
+        with os.fdopen(fd, "w") as token_file:
+            token_file.write(creds.to_json())
+        os.replace(tmp_path, token_path)
     except BaseException:
-        os.close(fd)
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
         raise
-    with token_file:
-        token_file.write(creds.to_json())
-    os.replace(tmp_path, token_path)
 
 
 def _load_cached_credentials(token_path: str) -> Credentials | None:
