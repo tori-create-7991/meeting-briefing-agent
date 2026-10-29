@@ -31,6 +31,14 @@ resource "google_storage_bucket_iam_member" "builder_build_bucket" {
   member = google_service_account.mcp_builder.member
 }
 
+# Cloud Build checks storage.buckets.get on the source and log bucket before
+# it starts; objectAdmin does not include it.
+resource "google_storage_bucket_iam_member" "builder_build_bucket_reader" {
+  bucket = google_storage_bucket.build.name
+  role   = "roles/storage.legacyBucketReader"
+  member = google_service_account.mcp_builder.member
+}
+
 resource "google_artifact_registry_repository_iam_member" "builder_push" {
   location   = google_artifact_registry_repository.images.location
   repository = google_artifact_registry_repository.images.name
