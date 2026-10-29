@@ -55,14 +55,21 @@ def caller_email(headers) -> str:
 
 
 @functools.cache
-def get_engine():
+def get_client():
+    # Keep the client for the life of the process: its AsyncClient's __del__
+    # closes the HTTP session it shares with the engine, and a later query
+    # then fails inside aiohttp with a bare AssertionError.
     import vertexai
 
-    client = vertexai.Client(
+    return vertexai.Client(
         project=os.environ["GOOGLE_CLOUD_PROJECT"],
         location=os.environ["GOOGLE_CLOUD_LOCATION"],
     )
-    return client.agent_engines.get(name=os.environ["AGENT_RUNTIME_RESOURCE"])
+
+
+@functools.cache
+def get_engine():
+    return get_client().agent_engines.get(name=os.environ["AGENT_RUNTIME_RESOURCE"])
 
 
 def agent_error(event: dict) -> str | None:

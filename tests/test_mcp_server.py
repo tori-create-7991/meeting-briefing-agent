@@ -167,3 +167,35 @@ def test_get_briefing_logs_agent_failures_with_traceback(monkeypatch, caplog):
 
     [record] = caplog.records
     assert record.exc_info and record.exc_info[0] is AssertionError
+
+
+def test_get_engine_keeps_the_vertexai_client_alive(monkeypatch):
+    # vertexai.Client owns an AsyncClient whose __del__ closes the HTTP
+    # session it shares with the engine. If the Client is garbage collected,
+    # the next query fails inside aiohttp with a bare AssertionError.
+    import gc
+    import sys
+    import types
+    import weakref
+
+    created = []
+
+    class FakeClient:
+        def __init__(self, project, location):
+            created.append(weakref.ref(self))
+            self.agent_engines = types.SimpleNamespace(get=lambda name: object())
+
+    monkeypatch.setitem(sys.modules, "vertexai", types.SimpleNamespace(Client=FakeClient))
+    monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "p")
+    monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+    monkeypatch.setenv("AGENT_RUNTIME_RESOURCE", "projects/p/locations/us-central1/reasoningEngines/1")
+    server.get_engine.cache_clear()
+    server.get_client.cache_clear()
+    try:
+        assert server.get_engine() is server.get_engine()
+        gc.collect()
+        [client_ref] = created
+        assert client_ref() is not None
+    finally:
+        server.get_engine.cache_clear()
+        server.get_client.cache_clear()
