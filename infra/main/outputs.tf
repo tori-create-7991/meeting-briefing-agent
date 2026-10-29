@@ -21,3 +21,13 @@ output "agent_effective_identity" {
   description = "Identity reported by Agent Runtime; compare with agent_principal after the first apply."
   value       = google_vertex_ai_reasoning_engine.agent.spec[0].effective_identity
 }
+
+output "build_bucket" {
+  description = "Staging bucket for scripts/build_mcp_image.sh."
+  value       = google_storage_bucket.build.name
+}
+
+output "builder_service_account" {
+  description = "Service account Cloud Build runs as."
+  value       = google_service_account.mcp_builder.email
+}

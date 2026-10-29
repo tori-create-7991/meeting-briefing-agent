@@ -102,6 +102,11 @@ Creating the Agent Runtime instance takes several minutes.
 scripts/build_mcp_image.sh <project_id> us-central1 v1
 ```
 
+The build runs as the `mcp-builder` service account from step 4, not the
+Compute Engine default one (new projects give that one no roles). It stages
+the source and logs in the `<project_id>-build` bucket, which deletes them
+after 7 days.
+
 Set `mcp_image` in `infra/main/terraform.tfvars` to the image the script
 printed, then:
 
@@ -198,7 +203,8 @@ project and look for the agent's spans.
 | `aiplatform.reasoningEngines...` permission denied | Add the missing permission to the `briefingQueryAgent` role in `infra/main/iam.tf` |
 | The agent restarts or runs out of memory | Raise `agent_memory` (for example `"4Gi"`) and apply |
 | `apply` rejects `min_instances = 0` | Set `agent_min_instances = 1` (the agent then bills while idle) |
-| Cloud Build cannot push the image | Grant the build service account `roles/artifactregistry.writer` on the `meeting-briefing` repository, or build locally with `docker build` and `docker push` |
+| Cloud Build: `...-compute@developer.gserviceaccount.com does not have storage.objects.get access` | The build ran as the Compute Engine default account. Apply `infra/main` (it creates `mcp-builder` and the build bucket) and build with `scripts/build_mcp_image.sh`, which passes them |
+| Cloud Build cannot push the image | Check that `mcp-builder` has `roles/artifactregistry.writer` on the `meeting-briefing` repository, or build locally with `docker build` and `docker push` |
 
 ## Cost
 

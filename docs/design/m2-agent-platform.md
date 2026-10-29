@@ -125,5 +125,6 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 | Agent Runtime の台数 | 指定なし | `agent_min_instances = 0`、`agent_max_instances = 2` | 呼び出し時だけ動かすので待機中の課金を避ける。0 が拒否されたら 1 にする |
 | Agent Runtime の 1 台の大きさ | 指定なし（既定は 4 vCPU / 4Gi） | `agent_cpu = "1"`、`agent_memory = "2Gi"` | 処理の大半は Calendar・Docs・Gemini の応答待ち。無料枠（請求先アカウントごとに月 50 vCPU 時間・100 GiB 時間）が約 4 倍長くもち、最小台数 0 が通らず常時 1 台になったときの費用も約 1/4 になる |
 | Artifact Registry の古いイメージ | 指定なし | 7 日より古い版を消す。ただし新しい 3 版は残す | 無料枠 0.5 GB を古いビルドで埋めない。Cloud Run が使う版と、戻し先は残る |
+| Cloud Build の実行 ID | 既定（Compute Engine の既定 SA） | 専用 SA `mcp-builder` と専用バケット `<project>-build`（7 日で削除）。権限はそのバケットの読み書き、イメージ置き場への push、ログ書き込みだけ | 新しいプロジェクトでは既定 SA に権限が付かず、アップロードしたソースを読めずに失敗した（2026-10-29 に確認） |
 | プロジェクト ID | 既定値あり | 既定値なし（`terraform.tfvars` で必須） | 公開リポジトリに組織固有の値を置かない |
 | headersHelper | `gcloud auth print-identity-token` を呼ぶだけ | gcloud と Python 3.10+ を自分で探す。`--account` で使うアカウントを固定。`--impersonate` でサービスアカウントとして呼ぶ道も用意（audience は Cloud Run の URL）。スクリプトは安定した場所に置き、user スコープで登録する | helper はログインシェルの PATH なしで動き得る（最小の PATH だと gcloud がシステムの Python 3.9 を拾い起動に失敗するのを確認）。gcloud の設定が複数あると、別アカウントのトークンで 403 になる |
