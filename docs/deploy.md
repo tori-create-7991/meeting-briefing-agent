@@ -197,7 +197,8 @@ project and look for the agent's spans.
 |---|---|
 | `/mcp` shows the server as failed to connect | The token was rejected at connect time. Run the helper command by hand to see gcloud's error, fix it (sign in again, `--account`, `--gcloud`), then reconnect from `/mcp` |
 | `/mcp` shows the server as needing authentication | A new token was still refused: the account is not in `invoker_members`, or `--account` names another account |
-| "cannot sign as the workspace-reader service account" | Agent Identity could not get `signBlob`. Set `runtime_identity = "service_account"` and apply: the agent then runs as the dedicated `briefing-runtime` service account |
+| "cannot sign as the workspace-reader service account" with `401 UNAUTHENTICATED` | The Agent Identity token is bound to the agent's certificate and was sent without mTLS. `credentials.py` signs over an mTLS session; make sure the deployed source is current (`scripts/build_agent_source.sh`, then apply) |
+| "cannot sign as the workspace-reader service account" with `403` | Agent Identity could not get `signBlob`. Set `runtime_identity = "service_account"` and apply: the agent then runs as the dedicated `briefing-runtime` service account |
 | "Domain-wide delegation is not authorized" | Step 6 is missing, or the client ID or scopes differ |
 | Model not found | Set `briefing_model` to a Gemini model available in the region |
 | `aiplatform.reasoningEngines...` permission denied | Add the missing permission to the `briefingQueryAgent` role in `infra/main/iam.tf` |

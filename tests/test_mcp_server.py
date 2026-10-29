@@ -69,11 +69,20 @@ def test_get_briefing_rejects_out_of_range_max_events(engine, max_events):
     assert engine.calls == []
 
 
-def test_query_agent_raises_on_error_event(monkeypatch):
-    fake = FakeEngine([{"error_code": "500", "error_message": "boom"}])
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"error_code": "500", "error_message": "boom"},
+        # Shape Agent Runtime streams when the agent raises (seen 2026-10-29).
+        {"code": 498, "message": "boom", "errorCode": "498", "errorMessage": "boom"},
+        {"code": 498, "message": "boom"},
+    ],
+)
+def test_query_agent_raises_on_error_event(monkeypatch, event):
+    fake = FakeEngine([event])
     monkeypatch.setattr(server, "get_engine", lambda: fake)
 
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(RuntimeError, match=r"agent error (498|500): boom"):
         asyncio.run(server.query_agent({"date": None, "max_events": 5}, "u"))
 
 
@@ -144,3 +153,17 @@ def test_get_briefing_reports_agent_failures_with_their_cause(monkeypatch):
 
     with pytest.raises(ToolError, match="reasoningEngines.query denied"):
         asyncio.run(server.get_briefing())
+
+
+def test_get_briefing_logs_agent_failures_with_traceback(monkeypatch, caplog):
+    def broken_engine():
+        raise AssertionError()
+
+    monkeypatch.setattr(server, "get_engine", broken_engine)
+
+    with caplog.at_level("ERROR", logger="meeting_briefing_mcp.server"):
+        with pytest.raises(ToolError):
+            asyncio.run(server.get_briefing())
+
+    [record] = caplog.records
+    assert record.exc_info and record.exc_info[0] is AssertionError

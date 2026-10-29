@@ -10,6 +10,7 @@ import base64
 import datetime
 import functools
 import json
+import logging
 import os
 
 from mcp.server.mcpserver import Context, MCPServer
@@ -19,6 +20,7 @@ WRITER_NAME = "briefing_writer"
 MAX_EVENTS_LIMIT = 20
 
 mcp = MCPServer("meeting-briefing")
+logger = logging.getLogger(__name__)
 
 
 def validate_request(date: str | None, max_events: int) -> dict:
@@ -63,6 +65,19 @@ def get_engine():
     return client.agent_engines.get(name=os.environ["AGENT_RUNTIME_RESOURCE"])
 
 
+def agent_error(event: dict) -> str | None:
+    """Return a message if the event reports an error, else None.
+
+    ADK events carry error_code / error_message. When the agent raises,
+    Agent Runtime streams {"code", "message", "errorCode", "errorMessage"}.
+    """
+    code = event.get("error_code") or event.get("errorCode") or event.get("code")
+    if not code:
+        return None
+    message = event.get("error_message") or event.get("errorMessage") or event.get("message")
+    return f"agent error {code}: {message}"
+
+
 async def query_agent(request: dict, user_id: str) -> str:
     texts: list[str] = []
     async for event in get_engine().async_stream_query(
@@ -70,8 +85,9 @@ async def query_agent(request: dict, user_id: str) -> str:
     ):
         if not isinstance(event, dict):
             continue
-        if event.get("error_code"):
-            raise RuntimeError(f"agent error {event['error_code']}: {event.get('error_message')}")
+        error = agent_error(event)
+        if error:
+            raise RuntimeError(error)
         if event.get("author") != WRITER_NAME:
             continue
         for part in (event.get("content") or {}).get("parts") or []:
@@ -103,6 +119,8 @@ async def get_briefing(
     try:
         return await query_agent(request, user_id)
     except Exception as exc:  # noqa: BLE001 - report the cause to the caller
+        # The caller only sees the message; keep the traceback in Cloud Logging.
+        logger.exception("Agent Runtime call failed")
         raise ToolError(f"Agent Runtime call failed: {type(exc).__name__}: {exc}") from exc
 
 

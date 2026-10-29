@@ -115,6 +115,7 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 
 | 点 | 設計時 | 実装 | 理由 |
 |---|---|---|---|
+| 署名 API への接続 | 普通の HTTPS | `AuthorizedSession.configure_mtls_channel()` を通した mTLS 接続で signBlob を呼ぶ（証明書が無い手元では何もしない） | Agent Runtime の Agent Identity のトークンはエージェントの証明書に紐付いていて、mTLS でないと IAM API が 401 を返す（2026-10-29 に確認）。紐付けを切る環境変数もあるが、Google が非推奨としているので使わない |
 | 委任の署名に使う権限 | `iam.serviceAccounts.signJwt` | `iam.serviceAccounts.signBlob`（`workspace-reader` の上でだけ付与） | `google.auth.iam.Signer` は IAM Credentials の signBlob API を呼ぶ |
 | Agent Runtime の `class_methods` | 指定なし | `scripts/gen_class_methods.py` で AdkApp から生成し、Terraform に渡す | ソースから載せるときは必須（SDK も自動生成して送っている） |
 | MCP の実装 | `FastMCP` | `mcp` 2.x の `MCPServer`。入力エラーと Agent Runtime の失敗は `ToolError` で返す | 2.x で改名。普通の例外は「Error executing tool」だけに丸められ、原因が呼び出し側に届かない |
