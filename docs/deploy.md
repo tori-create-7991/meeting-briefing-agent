@@ -184,6 +184,7 @@ project and look for the agent's spans.
 | Agent code or dependencies | `scripts/build_agent_source.sh`, then `terraform -chdir=infra/main apply` |
 | MCP front code | `scripts/build_mcp_image.sh <project_id> us-central1 <new tag>`, set `mcp_image`, then apply |
 | Model, language, timezone | `briefing_model`, `briefing_language`, `briefing_timezone` in `terraform.tfvars`, then apply |
+| Agent instance size | `agent_cpu`, `agent_memory` in `terraform.tfvars`, then apply |
 
 ## Troubleshooting
 
@@ -195,6 +196,7 @@ project and look for the agent's spans.
 | "Domain-wide delegation is not authorized" | Step 6 is missing, or the client ID or scopes differ |
 | Model not found | Set `briefing_model` to a Gemini model available in the region |
 | `aiplatform.reasoningEngines...` permission denied | Add the missing permission to the `briefingQueryAgent` role in `infra/main/iam.tf` |
+| The agent restarts or runs out of memory | Raise `agent_memory` (for example `"4Gi"`) and apply |
 | `apply` rejects `min_instances = 0` | Set `agent_min_instances = 1` (the agent then bills while idle) |
 | Cloud Build cannot push the image | Grant the build service account `roles/artifactregistry.writer` on the `meeting-briefing` repository, or build locally with `docker build` and `docker push` |
 
@@ -202,16 +204,21 @@ project and look for the agent's spans.
 
 What is billed, all to the billing account linked in step 2:
 
-- **Agent Runtime**: compute while the agent runs. With
+- **Agent Runtime**: vCPU and memory while the agent runs. With
   `agent_min_instances = 0` (the default here) it scales to zero between
-  calls.
+  calls. Each instance gets `agent_cpu` / `agent_memory` (default 1 vCPU and
+  2Gi; the runtime's own default is 4 vCPU and 4Gi). The first 50 vCPU-hours
+  and 100 GiB-hours each month are free, counted per billing account, so
+  other projects on the same billing account share them.
 - **Gemini on Vertex AI**: input and output tokens per briefing, and the
   judge model when you run the evaluation (`tests/eval`).
 - **Cloud Run**: request time of the MCP front; it scales to zero.
 - **Cloud Build, Artifact Registry, Cloud Storage, Cloud Trace**: small
-  amounts for builds, the image and the state bucket.
+  amounts for builds, the image and the state bucket. The image repository
+  deletes versions older than 7 days but always keeps the 3 newest.
 
 Free tiers apply per billing account. Check the current prices on the
+[Agent Platform pricing](https://cloud.google.com/products/gemini-enterprise-agent-platform/pricing),
 [Vertex AI pricing](https://cloud.google.com/vertex-ai/pricing) and
 [Cloud Run pricing](https://cloud.google.com/run/pricing) pages.
 

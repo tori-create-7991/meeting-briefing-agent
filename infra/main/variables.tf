@@ -77,6 +77,26 @@ variable "agent_max_instances" {
   default     = 2
 }
 
+variable "agent_cpu" {
+  description = "vCPUs per Agent Runtime instance (the runtime default is 4)."
+  type        = string
+  default     = "1"
+  validation {
+    condition     = contains(["1", "2", "4", "6", "8"], var.agent_cpu)
+    error_message = "agent_cpu must be one of 1, 2, 4, 6, 8."
+  }
+}
+
+variable "agent_memory" {
+  description = "Memory per Agent Runtime instance, in whole Gi (the runtime default is 4Gi)."
+  type        = string
+  default     = "2Gi"
+  validation {
+    condition     = can(regex("^([1-9]|[12][0-9]|3[0-2])Gi$", var.agent_memory))
+    error_message = "agent_memory must look like 2Gi (1Gi to 32Gi)."
+  }
+}
+
 variable "runtime_identity" {
   description = "agent_identity (default) or service_account (fallback: a dedicated briefing-runtime service account)."
   type        = string

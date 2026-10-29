@@ -27,6 +27,13 @@ resource "google_vertex_ai_reasoning_engine" "agent" {
       # Scale to zero between calls; this agent is only called on demand.
       min_instances = var.agent_min_instances
       max_instances = var.agent_max_instances
+      # The runtime default is 4 vCPU / 4Gi per instance. One user's briefing
+      # spends most of its time waiting on Calendar, Docs and Gemini, so a
+      # smaller instance is enough and stretches the monthly free tier.
+      resource_limits = {
+        cpu    = var.agent_cpu
+        memory = var.agent_memory
+      }
 
       # GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION and GOOGLE_CLOUD_AGENT_ENGINE*
       # are reserved and set by the runtime.
