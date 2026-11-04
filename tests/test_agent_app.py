@@ -1,12 +1,14 @@
 """The Agent Runtime entry point must not keep meeting text around."""
 
 import importlib
+from pathlib import Path
 
 from google.adk.sessions import InMemorySessionService
 
+AGENT_RUNTIME_TF = Path(__file__).resolve().parents[1] / "infra" / "main" / "agent_runtime.tf"
+
 
 def load_agent_app(monkeypatch, **env):
-    monkeypatch.delenv("ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS", raising=False)
     # AdkApp looks up a project when it is built; Agent Runtime sets these.
     monkeypatch.setenv("GOOGLE_CLOUD_PROJECT", "test-project")
     monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -17,20 +19,28 @@ def load_agent_app(monkeypatch, **env):
     return importlib.reload(agent_app)
 
 
-def test_spans_leave_out_llm_request_and_response(monkeypatch):
-    load_agent_app(monkeypatch)
+def test_tracing_is_not_turned_on_through_the_old_flag(monkeypatch):
+    agent_app = load_agent_app(monkeypatch)
 
-    import os
+    # AdkApp.set_up() sets ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=true whenever
+    # enable_tracing is True, which puts the full LLM request and response
+    # (event and document text) on the spans. Left unset, it sets false.
+    assert agent_app.app._tmpl_attrs.get("enable_tracing") is None
 
-    assert os.environ["ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS"] == "false"
+
+def test_tracing_is_on_with_the_telemetry_env_var(monkeypatch):
+    agent_app = load_agent_app(monkeypatch, GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY="true")
+
+    assert agent_app.app._tracing_enabled() is True
 
 
-def test_span_content_setting_can_be_overridden(monkeypatch):
-    load_agent_app(monkeypatch, ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS="true")
+def test_deployed_agent_sets_the_telemetry_env_var():
+    text = AGENT_RUNTIME_TF.read_text()
 
-    import os
-
-    assert os.environ["ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS"] == "true"
+    assert 'name  = "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY"' in text
+    after = text.split('name  = "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY"', 1)[1]
+    assert after.lstrip().startswith('value = "true"')
+    assert "ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS" not in text
 
 
 def test_sessions_stay_in_memory(monkeypatch):

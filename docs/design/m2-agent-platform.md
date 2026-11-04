@@ -35,7 +35,7 @@
 | D15 | 実行の ID | Agent Identity。足す権限は `workspace-reader` に対する `iam.serviceAccounts.signBlob` だけ（その SA の上でだけ付ける）。Gemini は既定の権限で呼ぶ | エージェント専用の ID で、共有も成り代わりも鍵も無い。Google は project 全体の権限を付けないよう案内している | 専用 SA（予備として変数 `runtime_identity` で切り替え可能にする） |
 | D16 | MCP 入口の認証 | Cloud Run の IAM（`run.invoker` は本人だけ）。Claude Code は user スコープの `headersHelper`（`scripts/mcp_headers.sh --account`）で本人の ID トークンを付ける。期限切れは 401/403 で Claude Code が helper を再実行して取り直す | 公開範囲がゼロのまま。アプリ側に認証コードが要らない | アプリ側 OAuth / IAP |
 | D17 | MCP 入口の実装 | Python の FastMCP。状態を持たない Streamable HTTP（`/mcp`）。実行 ID は `mcp-front` SA で、Agent Runtime を呼ぶ権限だけ | エージェント本体と同じ言語。Cloud Run の公式手順に沿う | TypeScript |
-| D18 | 観測・評価 | `AdkApp(enable_tracing=True)` で Cloud Trace。評価は 3 ケースのテスト集を `adk eval` で手動実行 | 目的が習得と発信。LLM を呼ぶ評価は結果がぶれるので CI には入れない | 評価なし / CI で評価 |
+| D18 | 観測・評価 | 環境変数 `GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=true` で Cloud Trace（本文は載せない。下の「実装で変えた点」）。評価は 3 ケースのテスト集を `adk eval` で手動実行 | 目的が習得と発信。LLM を呼ぶ評価は結果がぶれるので CI には入れない | 評価なし / CI で評価 |
 
 ## 構成
 
@@ -131,7 +131,7 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 | プロジェクト ID | 既定値あり | 既定値なし（`terraform.tfvars` で必須） | 公開リポジトリに組織固有の値を置かない |
 | headersHelper | `gcloud auth print-identity-token` を呼ぶだけ | gcloud と Python 3.10+ を自分で探す。`--account` で使うアカウントを固定。`--impersonate` でサービスアカウントとして呼ぶ道も用意（audience は Cloud Run の URL）。スクリプトは安定した場所に置き、user スコープで登録する | helper はログインシェルの PATH なしで動き得る（最小の PATH だと gcloud がシステムの Python 3.9 を拾い起動に失敗するのを確認）。gcloud の設定が複数あると、別アカウントのトークンで 403 になる |
 | Gemini の呼び出し先 | エージェントと同じ us-central1 | `BRIEFING_MODEL_LOCATION`（Terraform の既定は `global`）。ADK の `Gemini(client_kwargs={"location": ...})` で、Gemini の呼び出しだけを `global` に向ける。評価の判定役も `gemini-3.5-flash` に変更 | Gemini 3 系は `global` でしか提供されず、us-central1 では 404 になる。`gemini-2.5-flash` はこのプロジェクトではどちらでも 404（2026-11-04 に確認）。`GOOGLE_CLOUD_LOCATION` は Agent Runtime が予約していて、セッションにもエージェントのリージョンが要るので変えない |
-| トレースに残す内容 | 指定なし（ADK の既定） | `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false`（`agent_app.py` の既定値。環境変数で上書き可） | ADK の既定では LLM のリクエストと応答の全文が span に載り、予定と資料の本文が Cloud Trace に 30 日残っていた（2026-11-04 に実物で確認）。所要時間とトークン数は残る |
+| トレースに残す内容 | 指定なし（ADK の既定） | `AdkApp(enable_tracing=True)` をやめ、Terraform で `GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=true` を渡す | `enable_tracing=True` だと `AdkApp.set_up()` が `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=true` に上書きし、LLM のリクエストと応答の全文が span に載る。予定と資料の本文が Cloud Trace に 30 日残っていた（2026-11-04 に実物で確認。`agent_app.py` で既定値を false にする最初の修正も、この上書きで効かなかった）。環境変数で有効にすると AdkApp が false にする。所要時間とトークン数は残る |
 | セッションの保存先 | Agent Runtime の既定（マネージドのセッション） | `InMemorySessionService`（`session_service_builder`） | 既定では呼び出しごとにセッションが作られ、取得した本文と呼び出し元のメールアドレスが期限なしで残る。1 回きりの呼び出しなので保存しない。Sessions の課金も発生しない |
 | 予定が 0 件のとき | 「予定なし」を返して終える（データの流れ 3） | 執筆役の `before_agent_callback` が LLM を呼ばずに定型文を返す | 実装が LLM を呼んでいたのをレビューで指摘された。費用を使わない |
 | 指示文に埋め込むデータ | JSON をそのまま | `<` と `>` を `\u003c` / `\u003e` にして埋め込む | 招待の説明文に `</briefing_contexts>` と書けば区切りを閉じて指示を足せた。JSON の文字列の中なので意味は変わらない |

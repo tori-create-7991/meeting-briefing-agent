@@ -41,6 +41,12 @@ resource "google_vertex_ai_reasoning_engine" "agent" {
         name  = "GOOGLE_GENAI_USE_VERTEXAI"
         value = "TRUE"
       }
+      # Turns on Cloud Trace without the prompt and response text. The old
+      # AdkApp(enable_tracing=True) flag would record them on every span.
+      env {
+        name  = "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY"
+        value = "true"
+      }
       env {
         name  = "WORKSPACE_AUTH"
         value = "dwd"

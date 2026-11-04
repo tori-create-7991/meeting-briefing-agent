@@ -200,7 +200,7 @@ when you ask Claude Code to act on it.
 | Place | What | Kept for | Removed by |
 |---|---|---|---|
 | Agent Runtime sessions | Nothing. Sessions live in memory for one call (`agent_app.py`) | The call | The call ending |
-| Cloud Trace | Span names, timings, token counts, model name. Not the prompt or the response: `agent_app.py` sets `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false` | 30 days | Expiry |
+| Cloud Trace | Span names, timings, token counts, model name. Not the prompt or the response: tracing is turned on with `GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=true`, not `AdkApp(enable_tracing=True)`, which would record them | 30 days | Expiry |
 | Cloud Logging | Errors with tracebacks, IDs of documents that could not be fetched, Google API error text. Not event or document text | 30 days (`_Default` bucket) | Expiry |
 | Gemini on Vertex AI | The prompt for each call: event titles, times, descriptions and document text | See [Vertex AI data governance](https://cloud.google.com/vertex-ai/generative-ai/docs/data-governance) | — |
 | `<project_id>-build` bucket | Source uploads and logs of MCP front builds (no Workspace data) | 7 days | Lifecycle rule |
