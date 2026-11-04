@@ -2,19 +2,27 @@
 
 ContextFetcher collects events and doc text without an LLM and stores them
 in session state; BriefingWriter turns them into one briefing with a single
-LLM call.
+LLM call, or answers without the LLM when there are no events.
 """
 
+import json
 import os
 
 from google.adk.agents import LlmAgent, SequentialAgent
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.models import Gemini
+from google.genai import types
 
 from meeting_briefing_agent.fetcher import STATE_KEY, ContextFetcher
 
 DEFAULT_MODEL = "gemini-3.5-flash"
 DEFAULT_LANGUAGE = "ja"
+
+NO_EVENTS_TEXT = {
+    "ja": "指定の期間に予定はありません。",
+    "en": "There are no events for the requested period.",
+}
 
 WRITER_INSTRUCTION = """\
 You draft short pre-meeting briefings for busy people.
@@ -72,13 +80,30 @@ def build_writer(
     def instruction(ctx: ReadonlyContext) -> str:
         # An InstructionProvider bypasses ADK's {placeholder} state injection,
         # so braces inside event text cannot be misread as placeholders.
-        contexts = ctx.state.get(STATE_KEY, "[]")
+        # "<" and ">" only occur inside JSON strings, where < / >
+        # mean the same characters, so escaping them keeps the data intact
+        # while text such as "</briefing_contexts>" cannot end the block.
+        contexts = (
+            ctx.state.get(STATE_KEY, "[]").replace("<", "\\u003c").replace(">", "\\u003e")
+        )
         return WRITER_INSTRUCTION.format(language=language, contexts=contexts)
+
+    def answer_when_no_events(callback_context: CallbackContext) -> types.Content | None:
+        # Nothing to summarize, so skip the LLM call (and its cost).
+        try:
+            empty = json.loads(callback_context.state.get(STATE_KEY, "[]")) == []
+        except (TypeError, ValueError):
+            empty = False
+        if not empty:
+            return None
+        text = NO_EVENTS_TEXT.get(language, NO_EVENTS_TEXT["en"])
+        return types.Content(role="model", parts=[types.Part(text=text)])
 
     return LlmAgent(
         name="briefing_writer",
         model=build_model(model, location),
         instruction=instruction,
+        before_agent_callback=answer_when_no_events,
         tools=[],
     )
 

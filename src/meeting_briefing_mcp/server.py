@@ -6,6 +6,7 @@ code of its own. Run with:
     uvicorn meeting_briefing_mcp.server:app --host 0.0.0.0 --port $PORT
 """
 
+import asyncio
 import base64
 import datetime
 import functools
@@ -18,6 +19,9 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 WRITER_NAME = "briefing_writer"
 MAX_EVENTS_LIMIT = 20
+# A warm call takes about 10 s. Stop well before Cloud Run's 300 s request
+# timeout so the caller gets a reason instead of a dropped connection.
+AGENT_TIMEOUT_SECONDS = 240
 
 mcp = MCPServer("meeting-briefing")
 logger = logging.getLogger(__name__)
@@ -85,7 +89,7 @@ def agent_error(event: dict) -> str | None:
     return f"agent error {code}: {message}"
 
 
-async def query_agent(request: dict, user_id: str) -> str:
+async def _collect_writer_text(request: dict, user_id: str) -> list[str]:
     texts: list[str] = []
     async for event in get_engine().async_stream_query(
         user_id=user_id, message=json.dumps(request)
@@ -100,6 +104,14 @@ async def query_agent(request: dict, user_id: str) -> str:
         for part in (event.get("content") or {}).get("parts") or []:
             if part.get("text"):
                 texts.append(part["text"])
+    return texts
+
+
+async def query_agent(request: dict, user_id: str) -> str:
+    # wait_for (not asyncio.timeout) keeps Python 3.10 support.
+    texts = await asyncio.wait_for(
+        _collect_writer_text(request, user_id), AGENT_TIMEOUT_SECONDS
+    )
     if not texts:
         raise RuntimeError("the agent returned no briefing text")
     return "".join(texts)
@@ -125,6 +137,11 @@ async def get_briefing(
     user_id = caller_email(ctx.headers if ctx else None)
     try:
         return await query_agent(request, user_id)
+    except asyncio.TimeoutError as exc:  # TimeoutError on 3.11+
+        logger.exception("Agent Runtime call timed out")
+        raise ToolError(
+            f"Agent Runtime did not answer within {AGENT_TIMEOUT_SECONDS} s"
+        ) from exc
     except Exception as exc:  # noqa: BLE001 - report the cause to the caller
         # The caller only sees the message; keep the traceback in Cloud Logging.
         logger.exception("Agent Runtime call failed")

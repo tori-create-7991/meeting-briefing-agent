@@ -199,3 +199,22 @@ def test_get_engine_keeps_the_vertexai_client_alive(monkeypatch):
     finally:
         server.get_engine.cache_clear()
         server.get_client.cache_clear()
+
+
+class SlowEngine:
+    async def async_stream_query(self, user_id, message):
+        await asyncio.sleep(10)
+        yield writer_event("too late")
+
+
+def test_get_briefing_gives_up_after_the_agent_timeout(monkeypatch):
+    monkeypatch.setattr(server, "get_engine", lambda: SlowEngine())
+    monkeypatch.setattr(server, "AGENT_TIMEOUT_SECONDS", 0.05)
+
+    with pytest.raises(ToolError, match="did not answer within 0.05 s"):
+        asyncio.run(server.get_briefing())
+
+
+def test_agent_timeout_stays_under_the_cloud_run_request_timeout():
+    # Cloud Run ends requests after 300 s by default (cloud_run.tf sets none).
+    assert server.AGENT_TIMEOUT_SECONDS < 300
