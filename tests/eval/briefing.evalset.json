@@ -67,7 +67,7 @@
         {
           "rubric_id": "uses_doc",
           "rubric_content": {
-            "text_property": "The response mentions the release decision for v2.3 or the payment-screen blocker from the document."
+            "text_property": "The response mentions the v2.3 release decision, or a blocker about the payment screen (決済画面) display."
           },
           "type": "FINAL_RESPONSE_QUALITY"
         }
@@ -99,7 +99,7 @@
         {
           "rubric_id": "no_new_facts",
           "rubric_content": {
-            "text_property": "The response does not contain any person name, number, amount or date that is absent from the meeting titles, times, descriptions and document text."
+            "text_property": "Apart from section numbers and headings, the only names, numbers and dates in the response are these: the meeting titles 採用面談 and 顧客ミーティング, the date 2026-10-29, the times 10:00 and 11:00 (+09:00), and the terms 候補者, 一次面談, 設計力, コミュニケーション and 見積もり. The response contains no other person name, number, amount or date."
           },
           "type": "FINAL_RESPONSE_QUALITY"
         },

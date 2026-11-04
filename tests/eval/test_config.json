@@ -5,7 +5,16 @@
       "judge_model_options": {
         "judge_model": "gemini-3.5-flash",
         "num_samples": 1
-      }
+      },
+      "rubrics": [
+        {
+          "rubric_id": "written_in_japanese",
+          "rubric_content": {
+            "text_property": "The response is written in Japanese."
+          },
+          "type": "FINAL_RESPONSE_QUALITY"
+        }
+      ]
     }
   }
 }

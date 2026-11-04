@@ -24,6 +24,16 @@ def test_eval_config_parses():
     EvalConfig.model_validate_json((EVAL_DIR / "test_config.json").read_text())
 
 
+def test_rubric_metric_has_criterion_level_rubrics():
+    # The rubric evaluator refuses to start ("Rubrics are required.") unless
+    # the criterion itself lists at least one rubric; case rubrics are added
+    # on top of these.
+    config = json.loads((EVAL_DIR / "test_config.json").read_text())
+    criterion = config["criteria"]["rubric_based_final_response_quality_v1"]
+
+    assert criterion["rubrics"]
+
+
 def test_writer_agent_module_loads():
     import importlib.util
 

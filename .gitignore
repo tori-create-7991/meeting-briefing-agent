@@ -16,6 +16,9 @@ __pycache__/
 dist/
 *.egg-info/
 
+# adk eval run history (model output and judge rationales)
+.adk/
+
 # Terraform state and local settings (real IDs live only in terraform.tfvars)
 infra/**/.terraform/
 infra/**/.terraform.lock.hcl.bak
