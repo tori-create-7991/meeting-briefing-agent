@@ -4,8 +4,9 @@ resource "google_artifact_registry_repository" "images" {
   format        = "DOCKER"
 
   # Keep the free 0.5 GB from filling with old builds: delete versions older
-  # than 7 days, except the 3 newest (KEEP wins over DELETE), so the image
-  # Cloud Run serves and a rollback target always stay.
+  # than 7 days, except the 3 newest (KEEP wins over DELETE). The image Cloud
+  # Run serves normally stays, but three newer builds that were never
+  # deployed would push it out; rebuild from its commit if that happens.
   cleanup_policy_dry_run = false
   cleanup_policies {
     id     = "delete-older-than-7d"

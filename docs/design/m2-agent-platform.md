@@ -61,9 +61,9 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 ## データの流れ
 
 1. Claude Code が `get_briefing(date="2026-10-29", max_events=5)` を呼ぶ。
-2. `mcp-front` が Agent Runtime に `{"date": "2026-10-29", "max_events": 5}` を JSON の文字列で送る（`user_id` は呼び出し元のメールアドレス）。
-3. `ContextFetcher` が JSON を読み、`date` から JST のその日 0:00〜24:00 を作り、予定を取得し、資料を探して本文を読む。結果を `state["briefing_contexts"]` に入れる。予定が無ければ「予定なし」の文を返して終わる。
-4. `BriefingWriter` が `{briefing_contexts}` と出力言語を受け取り、予定ごとの見出し付きでブリーフィングを書く。
+2. `mcp-front` が Agent Runtime に `{"date": "2026-10-29", "max_events": 5}` を JSON の文字列で送る（`user_id` は呼び出し元のメールアドレス。セッションはメモリ上にしか作らないので残らない）。
+3. `ContextFetcher` が JSON を読み、`date` から JST のその日 0:00〜24:00 を作り、予定を取得し、資料を探して本文を読む。結果を `state["briefing_contexts"]` に入れる。
+4. `BriefingWriter` が `{briefing_contexts}` と出力言語を受け取り、予定ごとの見出し付きでブリーフィングを書く。予定が無ければ LLM を呼ばずに「予定なし」の文を返す（`before_agent_callback`）。
 5. `mcp-front` が返ってきたテキストをつないでツールの結果として返す。
 
 ## エラー処理
@@ -72,9 +72,10 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 |---|---|
 | 委任の署名が拒否される（signBlob の権限なし） | `ContextFetcher` が「workspace-reader に対する signBlob 権限がない」と分かるメッセージで失敗し、MCP のエラーとして返る |
 | Workspace で委任が許可されていない（`unauthorized_client`） | 「管理コンソールで client ID <id> に 2 スコープを許可する」と案内するメッセージ |
-| ドキュメントの取得に失敗 | M1 と同じく警告を出して空文字で続行 |
+| ドキュメントの取得に失敗 | 警告を出し、その資料を `{"id", "error": "fetch_failed"}` として続行。執筆役は「取得できなかった」と書き、中身を推測しない |
 | `date` の形式が不正 | MCP 入口で検証し、`YYYY-MM-DD` を求めるエラーを返す（Agent Runtime を呼ばない） |
 | Agent Runtime の呼び出し失敗 | `mcp-front` がエラー内容を付けて MCP のエラーとして返す |
+| Agent Runtime が 240 秒以内に答えない | `mcp-front` が待つのをやめ、時間切れと分かるエラーを返す（Cloud Run の 300 秒より前） |
 
 ## テスト
 
@@ -94,8 +95,8 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 | 前提 | 確かめ方 | だめだった場合 |
 |---|---|---|
 | Agent Identity から `workspace-reader` で署名し、Calendar を読める | デプロイ後に `get_briefing` を呼ぶ | 変数 `runtime_identity = "service_account"` に切り替え、専用 SA（`briefing-runtime`）を実行 ID にする |
-| `gemini-3.5-flash` の ID が us-central1 の Vertex AI で使える | Model Garden / 呼び出しで確認 | `BRIEFING_MODEL` を使える ID に変える |
-| ソースを変えたとき Agent Runtime が上書き更新か作り直しか | 2 回目の `terraform plan` | 作り直しでも IAM は Terraform が付け直すので構成は変えない。記録だけ残す |
+| `gemini-3.5-flash` の ID が us-central1 の Vertex AI で使える | Model Garden / 呼び出しで確認 | `BRIEFING_MODEL` を使える ID に変える（結果: us-central1 には無く、`global` で使う。「実装で変えた点」） |
+| ソースを変えたとき Agent Runtime が上書き更新か作り直しか | 2 回目の `terraform plan` | 作り直しでも IAM は Terraform が付け直すので構成は変えない。記録だけ残す（結果: 上書き更新。2026-10-29 と 2026-11-04 に確認） |
 | `mcp-front` に必要な権限名（`aiplatform.reasoningEngines.get` / `.query`） | 呼び出しで確認 | 足りない権限をカスタムロールに足す |
 
 ## やらないこと
@@ -130,3 +131,8 @@ Claude Code ──(ID トークン / headersHelper)──▶ Cloud Run: mcp-fron
 | プロジェクト ID | 既定値あり | 既定値なし（`terraform.tfvars` で必須） | 公開リポジトリに組織固有の値を置かない |
 | headersHelper | `gcloud auth print-identity-token` を呼ぶだけ | gcloud と Python 3.10+ を自分で探す。`--account` で使うアカウントを固定。`--impersonate` でサービスアカウントとして呼ぶ道も用意（audience は Cloud Run の URL）。スクリプトは安定した場所に置き、user スコープで登録する | helper はログインシェルの PATH なしで動き得る（最小の PATH だと gcloud がシステムの Python 3.9 を拾い起動に失敗するのを確認）。gcloud の設定が複数あると、別アカウントのトークンで 403 になる |
 | Gemini の呼び出し先 | エージェントと同じ us-central1 | `BRIEFING_MODEL_LOCATION`（Terraform の既定は `global`）。ADK の `Gemini(client_kwargs={"location": ...})` で、Gemini の呼び出しだけを `global` に向ける。評価の判定役も `gemini-3.5-flash` に変更 | Gemini 3 系は `global` でしか提供されず、us-central1 では 404 になる。`gemini-2.5-flash` はこのプロジェクトではどちらでも 404（2026-11-04 に確認）。`GOOGLE_CLOUD_LOCATION` は Agent Runtime が予約していて、セッションにもエージェントのリージョンが要るので変えない |
+| トレースに残す内容 | 指定なし（ADK の既定） | `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false`（`agent_app.py` の既定値。環境変数で上書き可） | ADK の既定では LLM のリクエストと応答の全文が span に載り、予定と資料の本文が Cloud Trace に 30 日残っていた（2026-11-04 に実物で確認）。所要時間とトークン数は残る |
+| セッションの保存先 | Agent Runtime の既定（マネージドのセッション） | `InMemorySessionService`（`session_service_builder`） | 既定では呼び出しごとにセッションが作られ、取得した本文と呼び出し元のメールアドレスが期限なしで残る。1 回きりの呼び出しなので保存しない。Sessions の課金も発生しない |
+| 予定が 0 件のとき | 「予定なし」を返して終える（データの流れ 3） | 執筆役の `before_agent_callback` が LLM を呼ばずに定型文を返す | 実装が LLM を呼んでいたのをレビューで指摘された。費用を使わない |
+| 指示文に埋め込むデータ | JSON をそのまま | `<` と `>` を `\u003c` / `\u003e` にして埋め込む | 招待の説明文に `</briefing_contexts>` と書けば区切りを閉じて指示を足せた。JSON の文字列の中なので意味は変わらない |
+| `mcp-front` の待ち時間 | 指定なし | 240 秒で打ち切る（`asyncio.wait_for`） | Cloud Run の 300 秒で接続ごと切られる前に、理由の分かるエラーを返す。普段は約 10 秒 |

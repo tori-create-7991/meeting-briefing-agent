@@ -131,6 +131,13 @@ https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/aut
 The `workspace-reader` service account has no key and no GCP roles. Only the
 agent's identity can sign as it, and only for these two read-only scopes.
 
+What this grant allows: anyone who can sign as `workspace-reader` can read
+the calendar and documents of **any** user in the domain, read-only. The
+agent always names `workspace_subject`, but that is a setting, not a limit
+Google enforces. Signing is granted to the agent's identity only, yet
+project Owners can grant it to themselves. Keep this project dedicated to
+the agent and its Owners few.
+
 ## 7. Register the MCP server in Claude Code
 
 ```bash
@@ -180,7 +187,25 @@ Ask Claude Code something like "brief me on my meetings on 2026-10-29". It
 calls `get_briefing(date="2026-10-29")` and returns the briefing.
 
 Each run is traced: open **Trace Explorer** in the Cloud console for the
-project and look for the agent's spans.
+project and look for the agent's spans (`context_fetcher` and
+`briefing_writer`, with timings and token counts). The MCP front's request
+is a separate trace.
+
+The briefing summarizes text that other people wrote: invitation
+descriptions and shared documents. Treat it as data, not as instructions,
+when you ask Claude Code to act on it.
+
+## What is stored where
+
+| Place | What | Kept for | Removed by |
+|---|---|---|---|
+| Agent Runtime sessions | Nothing. Sessions live in memory for one call (`agent_app.py`) | The call | The call ending |
+| Cloud Trace | Span names, timings, token counts, model name. Not the prompt or the response: `agent_app.py` sets `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS=false` | 30 days | Expiry |
+| Cloud Logging | Errors with tracebacks, IDs of documents that could not be fetched, Google API error text. Not event or document text | 30 days (`_Default` bucket) | Expiry |
+| Gemini on Vertex AI | The prompt for each call: event titles, times, descriptions and document text | See [Vertex AI data governance](https://cloud.google.com/vertex-ai/generative-ai/docs/data-governance) | — |
+| `<project_id>-build` bucket | Source uploads and logs of MCP front builds (no Workspace data) | 7 days | Lifecycle rule |
+
+Anyone with a viewer role on the project can read the traces and logs.
 
 ## Updating
 
@@ -190,6 +215,21 @@ project and look for the agent's spans.
 | MCP front code | `scripts/build_mcp_image.sh <project_id> us-central1 <new tag>`, set `mcp_image`, then apply |
 | Model, language, timezone | `briefing_model`, `briefing_model_location`, `briefing_language`, `briefing_timezone` in `terraform.tfvars`, then apply |
 | Agent instance size | `agent_cpu`, `agent_memory` in `terraform.tfvars`, then apply |
+
+Agent source updates change the Agent Runtime instance in place (checked
+2026-10-29 and 2026-11-04), so the agent's identity and its IAM grants stay.
+
+## Rolling back
+
+- **MCP front**: set `mcp_image` to the previous tag and apply. The image
+  repository keeps the 3 newest versions and anything younger than 7 days;
+  if the tag is gone, check out its commit and build it again.
+- **Agent**: check out the previous commit, run
+  `scripts/build_agent_source.sh`, then apply.
+- **After a destroy and a new apply**: `workspace-reader` gets a new client
+  ID, so add it again in the Admin console (step 6) and remove the old
+  entry. The agent's identity changes with the new instance; Terraform
+  grants the new one again.
 
 ## Troubleshooting
 
@@ -217,8 +257,11 @@ What is billed, all to the billing account linked in step 2:
   2Gi; the runtime's own default is 4 vCPU and 4Gi). The first 50 vCPU-hours
   and 100 GiB-hours each month are free, counted per billing account, so
   other projects on the same billing account share them.
-- **Gemini on Vertex AI**: input and output tokens per briefing, and the
-  judge model when you run the evaluation (`tests/eval`).
+  Agent Runtime also bills session storage, but this agent keeps sessions in
+  memory, so there is none.
+- **Gemini on Vertex AI**: input and output tokens per briefing (none when
+  there are no events), and the judge model when you run the evaluation
+  (`tests/eval`: 3 writer calls and 3 judge calls per run).
 - **Cloud Run**: request time of the MCP front; it scales to zero.
 - **Cloud Build, Artifact Registry, Cloud Storage, Cloud Trace**: small
   amounts for builds, the image and the state bucket. The image repository
@@ -235,14 +278,28 @@ Set a budget by hand (Terraform here has no access to the billing account's
 budgets): **Billing → Budgets & alerts → Create budget**, scope it to this
 project, and add email alerts, for example at 50%, 90% and 100%.
 
+A budget only sends alerts; it does not stop spending. Only the accounts in
+`invoker_members` can call the MCP front, and `agent_max_instances` caps how
+many agent instances run at once. To stop spending, run the tear down below.
+
 ## Tear down
+
+`infra/main` reads `dist/` even when destroying. In a fresh checkout, run
+`scripts/build_agent_source.sh` first.
 
 ```bash
 terraform -chdir=infra/main destroy
 ```
 
 To delete the project too, set `deletion_policy = "DELETE"` in
-`infra/bootstrap/terraform.tfvars`, apply, then:
+`infra/bootstrap/terraform.tfvars` and apply. The state bucket keeps old
+versions and refuses to be deleted while it holds any, so empty it:
+
+```bash
+gcloud storage rm --recursive --all-versions "gs://<project_id>-tfstate/**"
+```
+
+Then:
 
 ```bash
 terraform -chdir=infra/bootstrap destroy

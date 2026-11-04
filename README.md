@@ -131,6 +131,11 @@ Check the current
 [Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms)
 before use.
 
+When deployed, the agent keeps no copy of the event or document text:
+sessions live in memory for one call, and traces record timings and token
+counts but not the prompt or the response. See
+[What is stored where](docs/deploy.md#what-is-stored-where).
+
 Event descriptions and documents can be written by people outside your
 organization. The agent treats them as data and has no tools, so it can
 only return text; still, read briefings with that in mind.
