@@ -11,4 +11,5 @@ from meeting_briefing_agent.agent import DEFAULT_LANGUAGE, DEFAULT_MODEL, build_
 root_agent = build_writer(
     language=os.getenv("BRIEFING_LANGUAGE", DEFAULT_LANGUAGE),
     model=os.getenv("BRIEFING_MODEL", DEFAULT_MODEL),
+    location=os.getenv("BRIEFING_MODEL_LOCATION") or None,
 )

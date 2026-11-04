@@ -19,13 +19,14 @@ Each case is scored by an LLM judge against its rubrics
 ```bash
 export GOOGLE_GENAI_USE_VERTEXAI=TRUE
 export GOOGLE_CLOUD_PROJECT=<your project>
-export GOOGLE_CLOUD_LOCATION=us-central1
+export GOOGLE_CLOUD_LOCATION=global
 uv run adk eval tests/eval/writer_agent tests/eval/briefing.evalset.json \
   --config_file_path tests/eval/test_config.json --print_detailed_results
 ```
 
 Both the writer (`BRIEFING_MODEL`) and the judge call Gemini on Vertex AI,
-so each run is billed to that project.
+so each run is billed to that project. Gemini 3 models are served only from
+the `global` location, not from regions such as `us-central1`.
 
 ## Why this is not in CI
 

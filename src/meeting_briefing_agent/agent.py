@@ -9,6 +9,7 @@ import os
 
 from google.adk.agents import LlmAgent, SequentialAgent
 from google.adk.agents.readonly_context import ReadonlyContext
+from google.adk.models import Gemini
 
 from meeting_briefing_agent.fetcher import STATE_KEY, ContextFetcher
 
@@ -50,7 +51,24 @@ Write everything in this language: {language}
 """
 
 
-def build_writer(language: str = DEFAULT_LANGUAGE, model: str = DEFAULT_MODEL) -> LlmAgent:
+def build_model(model: str, location: str | None = None) -> str | Gemini:
+    """The writer's model, optionally pinned to a Vertex AI location.
+
+    Without a location the client follows GOOGLE_CLOUD_LOCATION (or uses the
+    Gemini API key). Agent Runtime reserves GOOGLE_CLOUD_LOCATION for the
+    agent's own region, but Gemini 3 models are served only from "global",
+    so the deployed agent sets BRIEFING_MODEL_LOCATION instead.
+    """
+    if not location:
+        return model
+    return Gemini(model=model, client_kwargs={"location": location})
+
+
+def build_writer(
+    language: str = DEFAULT_LANGUAGE,
+    model: str = DEFAULT_MODEL,
+    location: str | None = None,
+) -> LlmAgent:
     def instruction(ctx: ReadonlyContext) -> str:
         # An InstructionProvider bypasses ADK's {placeholder} state injection,
         # so braces inside event text cannot be misread as placeholders.
@@ -59,7 +77,7 @@ def build_writer(language: str = DEFAULT_LANGUAGE, model: str = DEFAULT_MODEL) -
 
     return LlmAgent(
         name="briefing_writer",
-        model=model,
+        model=build_model(model, location),
         instruction=instruction,
         tools=[],
     )
@@ -73,6 +91,7 @@ def build_root_agent() -> SequentialAgent:
             build_writer(
                 language=os.getenv("BRIEFING_LANGUAGE", DEFAULT_LANGUAGE),
                 model=os.getenv("BRIEFING_MODEL", DEFAULT_MODEL),
+                location=os.getenv("BRIEFING_MODEL_LOCATION") or None,
             ),
         ],
     )

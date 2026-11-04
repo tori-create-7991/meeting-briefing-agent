@@ -57,6 +57,12 @@ resource "google_vertex_ai_reasoning_engine" "agent" {
         name  = "BRIEFING_MODEL"
         value = var.briefing_model
       }
+      # GOOGLE_CLOUD_LOCATION stays the agent's region (sessions need it);
+      # this sends only the Gemini calls elsewhere.
+      env {
+        name  = "BRIEFING_MODEL_LOCATION"
+        value = var.briefing_model_location
+      }
       env {
         name  = "BRIEFING_LANGUAGE"
         value = var.briefing_language

@@ -70,6 +70,7 @@ GOOGLE_API_KEY=<your AI Studio key>
 | Variable | Default | Meaning |
 |---|---|---|
 | `BRIEFING_MODEL` | `gemini-3.5-flash` | Gemini model ID |
+| `BRIEFING_MODEL_LOCATION` | unset | Vertex AI location for the Gemini call only (for example `global`); unset follows `GOOGLE_CLOUD_LOCATION`. Ignored with an API key |
 | `BRIEFING_LANGUAGE` | `ja` | Language the briefing is written in |
 | `BRIEFING_TIMEZONE` | `Asia/Tokyo` | Timezone that `--date` refers to |
 | `CALENDAR_ID` | `primary` | Calendar to read |

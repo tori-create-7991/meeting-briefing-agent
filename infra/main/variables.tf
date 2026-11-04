@@ -53,6 +53,12 @@ variable "briefing_model" {
   default     = "gemini-3.5-flash"
 }
 
+variable "briefing_model_location" {
+  description = "Vertex AI location the briefing writer calls Gemini in. Gemini 3 models are served only from \"global\", not from the agent's region."
+  type        = string
+  default     = "global"
+}
+
 variable "briefing_language" {
   description = "Language the briefing is written in."
   type        = string

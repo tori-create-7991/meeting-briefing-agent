@@ -188,7 +188,7 @@ project and look for the agent's spans.
 |---|---|
 | Agent code or dependencies | `scripts/build_agent_source.sh`, then `terraform -chdir=infra/main apply` |
 | MCP front code | `scripts/build_mcp_image.sh <project_id> us-central1 <new tag>`, set `mcp_image`, then apply |
-| Model, language, timezone | `briefing_model`, `briefing_language`, `briefing_timezone` in `terraform.tfvars`, then apply |
+| Model, language, timezone | `briefing_model`, `briefing_model_location`, `briefing_language`, `briefing_timezone` in `terraform.tfvars`, then apply |
 | Agent instance size | `agent_cpu`, `agent_memory` in `terraform.tfvars`, then apply |
 
 ## Troubleshooting
@@ -200,7 +200,7 @@ project and look for the agent's spans.
 | "cannot sign as the workspace-reader service account" with `401 UNAUTHENTICATED` | The Agent Identity token is bound to the agent's certificate and was sent without mTLS. `credentials.py` signs over an mTLS session; make sure the deployed source is current (`scripts/build_agent_source.sh`, then apply) |
 | "cannot sign as the workspace-reader service account" with `403` | Agent Identity could not get `signBlob`. Set `runtime_identity = "service_account"` and apply: the agent then runs as the dedicated `briefing-runtime` service account |
 | "Domain-wide delegation is not authorized" | Step 6 is missing, or the client ID or scopes differ |
-| Model not found | Set `briefing_model` to a Gemini model available in the region |
+| `Publisher model ... was not found` | The model is not served from `briefing_model_location`. Gemini 3 models are served only from `global` (the default); older ones may be retired for new projects. Set `briefing_model` and `briefing_model_location` to a pair that answers, then apply |
 | `aiplatform.reasoningEngines...` permission denied | Add the missing permission to the `briefingQueryAgent` role in `infra/main/iam.tf` |
 | The agent restarts or runs out of memory | Raise `agent_memory` (for example `"4Gi"`) and apply |
 | `apply` rejects `min_instances = 0` | Set `agent_min_instances = 1` (the agent then bills while idle) |
